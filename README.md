@@ -1,10 +1,10 @@
-# Freqeuncy Domain Perfectly Matched Layer
+# Frequency Domain Perfectly Matched Layer
 
 For technical details on the method please refer :
 
 	kakodkar et. al. Journal of Applied Physics 118, 094301 (2015)
 
-================================================================================================
+========================================================================================
 
 	Pre-requisites:		Primary domain should be generated using 
 						gendomain.f90 provided in this repository
