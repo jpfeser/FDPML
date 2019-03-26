@@ -2,14 +2,13 @@
 
 For technical details on the method please refer :
 
-	kakodkar et. al. Journal of Applied Physics 118, 094301 (2015)
+kakodkar et. al. Journal of Applied Physics 118, 094301 (2015)
 
 ========================================================================================
 
-	Pre-requisites:		Primary domain should be generated using 
-						gendomain.f90 provided in this repository
+Pre-requisites:	Primary domain should be generated using gendomain.f90 provided in this repository
 
-	Force constant file should generated using Quantum Espresso in *.fc format
+Force constant file should generated using Quantum Espresso in *.fc format
 
 	
  	FDPML calculates scattering properties for a particular phonon mode 
