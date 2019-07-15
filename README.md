@@ -34,10 +34,20 @@ All quantities whose dimensions are not explicitly specified are in RYDBERG ATOM
 
 Structure of the input data:
 
-	`&filenames
+	&filenames
 		...
 	/
-	`
+	&system
+		...
+	/
+	&postprocessing
+		...
+	/
+	&plotting
+		...
+	/
+
+
 
 
 
