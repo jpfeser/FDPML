@@ -25,8 +25,8 @@ Upon installation execultables will be created in `\bin` folder
 
 The method can be used to obtain 2 properties intrinsic to heat transport through nanostructured materials.
 
-1. Transmission coefficient - Please refer ![here](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.95.125434)
-2. Scattering Cross-section - Please refer ![here](https://aip.scitation.org/doi/abs/10.1063/1.5031757)
+1. Transmission coefficient - Please refer [here](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.95.125434)
+2. Scattering Cross-section - Please refer [here](https://aip.scitation.org/doi/abs/10.1063/1.5031757)
 
 
 
