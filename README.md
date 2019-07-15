@@ -7,6 +7,20 @@ FDPML is a computational method to simulate heat transport through nanostructure
 For a more detailed mathematical discription of the mode please refer  
 `kakodkar et. al. Journal of Applied Physics 118, 094301 (2015)`
 
+## Installation
+
+### Dependencies
+
+1) MPI
+2) openmpi FORTRAN90 Compiler
+3) IntelMKL
+
+Clone this repository using `git clone git@github.com:Rohit-Kakodkar/FDPML.git`
+
+Install using Makefile : `make all`
+
+
+
 
 <!-- # Frequency Domain Perfectly Matched Layer
 
