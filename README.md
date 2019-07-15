@@ -54,8 +54,8 @@ Structure of the input data:
 Input cards:
 
 1. filenames
-	* *flfrc1* _Strong_ -
-	 					*force constant file of the matrix material (should be generated via Quantum espresso). NOT IN XML FORMAT* _emphasize_
+	* **flfrc1**  -
+	 					*force constant file of the matrix material (should be generated via Quantum espresso). NOT IN XML FORMAT* 
 	* flfrc2 -
 						force constant file of impurity material (should be generated via Quantum espresso). NOT IN XML FORMAT
 	* mass_input -
