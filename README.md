@@ -4,7 +4,7 @@
 
 FDPML is a computational method to simulate heat transport through nanostructured materials. The method converts atomistic equations of motion for every atom inside a simulation domain to a set of linear algebraic equations. The equations can then be solved using iterative solvers. The model is efficient as it stores the matrices in sparse format (COO), while also being able to be deployed across multiple cluster node.
 
-For a more detailed mathematical discription of the mode please refer  
+For a more detailed mathematical description of the model please refer  
 `kakodkar et. al. Journal of Applied Physics 118, 094301 (2015)`
 
 ## Installation
@@ -88,7 +88,6 @@ Input cards:
 	* **plot_uscat** = *logical, plot scattered wave*
 	* **plot_sig** = *logical, plot variation of damping coefficient*
 	* **plottingmode** = *1, 2, or 3, plot x, y, or z components of above properties*
-
 
 
 
