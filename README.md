@@ -55,7 +55,7 @@ Input cards:
 
 1. filenames
 	* flfrc1 -
-	 					force constant file of the matrix material (should be generated via Quantum espresso). NOT IN XML FORMAT
+	 					`force constant file of the matrix material (should be generated via Quantum espresso). NOT IN XML FORMAT`
 	* flfrc2 -
 						force constant file of impurity material (should be generated via Quantum espresso). NOT IN XML FORMAT
 	* mass_input -
