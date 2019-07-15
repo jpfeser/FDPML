@@ -513,26 +513,6 @@ PROGRAM FDPML
 		zc = CMPLX(-1.0, 0.0, KIND = CP)*zc(:)
 	ENDIF
 
-	! CALL MPI_BCAST(natc, 1, MPI_INT, root_process, comm, ierr)
-
-	! IF (.NOT. (root_node)) THEN
-		! ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
-		! ALLOCATE(ib_vec1(nat(1), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
-		! ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
-		! ALLOCATE(na_vec(natc))
-		! ALLOCATE(r_cell(3, natc))
-	! ENDIF
-	
-	! CALL MPI_BCAST(tauc, 3*natc, mp_real, root_process, comm, ierr)
-	! CALL MPI_BCAST(itypc, natc, MPI_INT, root_process, comm, ierr)
-	! CALL MPI_BCAST(zc, 3*natc, mp_complex, root_process, comm, ierr)
-	! CALL MPI_BCAST(ib_vec1, (nat(1)*(4*nr1+1)*(4*nr2+1)*(4*nr3+1)*natc), MPI_INT, root_process, comm, ierr)
-	! CALL MPI_BCAST(ib_vec2, (nat(2)*(4*nr1+1)*(4*nr2+1)*(4*nr3+1)*natc), MPI_INT, root_process, comm, ierr)
-	! CALL MPI_BCAST(atc, 9, MPI_REAL, root_process, comm, ierr)
-	! CALL MPI_BCAST(na_vec, natc, MPI_INT, root_process, comm, ierr)
-	! CALL MPI_BCAST(r_cell, 3*natc, mp_real, root_process, comm, ierr)
-
-	! print *, 'Hello ', my_id 
 
 
 !	========================================================================================

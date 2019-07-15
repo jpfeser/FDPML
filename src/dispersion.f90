@@ -73,76 +73,11 @@ MODULE dispersion
 		END IF
 		
 		dyn(:,:,:,:) = (0.D0, 0.D0)
-		
-!		lo_to_split = .FALSE.
-		
-!		f_of_q(:,:,:,:) = CMPLX(0.D0, 0.D0, KIND = RP)
-!		IF(na_ifc) THEN
-
-!          qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
-!          if(qq == 0.0) qq=1.0
-!          qhat(1)=q(1)/qq
-!          qhat(2)=q(2)/qq
-!          qhat(3)=q(3)/qq
-
-!          CALL nonanal_ifc (nat,nat,ityp,epsil,qhat,zeu,omega, &
-!                          nr1, nr2, nr3,f_of_q)
-!       END IF
         
         dyn(:,:,:,:) = CMPLX(0.d0,0.d0, KIND =RP)
                 
 		CALL frc_blk (dyn,q,tau,nat,nr1,nr2,nr3,frc,at,bg,rws,nrws,f_of_q,fd)
 		
-		!IF (has_zstar .and. .not.na_ifc) &
-		!	CALL rgd_blk(nr1,nr2,nr3,nat,dyn,q,tau,epsil,zeu,bg,omega,+1.d0)
-			
-		!if (io_node) CALL write_dyn_on_file (q, dyn, nat)
-						 
-		! qhat(1) = q(1)*at(1,1)+q(2)*at(2,1)+q(3)*at(3,1)
-        ! qhat(2) = q(1)*at(1,2)+q(2)*at(2,2)+q(3)*at(3,2)
-        ! qhat(3) = q(1)*at(1,3)+q(2)*at(2,3)+q(3)*at(3,3)
-        ! IF ( ABS( qhat(1) - NINT (qhat(1) ) ) <= eps .AND. &
-             ! ABS( qhat(2) - NINT (qhat(2) ) ) <= eps .AND. &
-             ! ABS( qhat(3) - NINT (qhat(3) ) ) <= eps ) THEN
-           ! !
-           ! ! q = 0 : we need the direction q => 0 for the non-analytic part
-           ! !
-! !           IF ( n == 1 ) THEN
-! !              ! if q is the first point in the list
-! !              IF ( nq > 1 ) THEN
-! !                 ! one more point
-! !                 qhat(:) = q(:,n) - q(:,n+1)
-! !              ELSE
-! !                 ! no more points
-! !                 qhat(:) = 0.d0
-! !              END IF
-! !           ELSE IF ( n > 1 ) THEN
-! !              ! if q is not the first point in the list
-! !              IF ( q(1,n-1)==0.d0 .AND. &
-! !                   q(2,n-1)==0.d0 .AND. &
-! !                   q(3,n-1)==0.d0 .AND. n < nq ) THEN
-! !                 ! if the preceding q is also 0 :
-! !                 qhat(:) = q(:,n) - q(:,n+1)
-! !              ELSE
-! !                 ! if the preceding q is npt 0 :
-! !                 qhat(:) = q(:,n) - q(:,n-1)
-! !              END IF
-! !           END IF
-		   ! qhat(:) = 0.d0 
-           ! qh = SQRT(qhat(1)**2+qhat(2)**2+qhat(3)**2)
-           ! ! write(*,*) ' qh,  has_zstar ',qh,  has_zstar
-           ! IF (qh /= 0.d0) qhat(:) = qhat(:) / qh
-           ! IF (qh /= 0.d0 .AND. .NOT. has_zstar) THEN
-                ! write(*,*) ' WARNING : Z* not found lo-to splitting will be absent'
-           ! ELSE
-              ! lo_to_split=.TRUE.
-           ! ENDIF
-           ! !
-           ! CALL nonanal (nat, nat, itau, epsil, qhat, zeu, omega, dyn)
-           ! !
-        ! END IF
-        
-        ! if(io_node) call write_dyn_on_file(q,dyn,nat)
         
         CALL dyndiag(nat,ntyp,amass,ityp,dyn,w2,z)
 		
