@@ -89,6 +89,10 @@ Input cards:
 	* **plot_sig** = *logical, plot variation of damping coefficient*
 	* **plottingmode** = *1, 2, or 3, plot x, y, or z components of above properties*
 
+## Future improvements (In progress)
+
+- Incorporate anharmonic force constants while obtaining thermal properties
+-
 
 
 <!-- # Frequency Domain Perfectly Matched Layer
