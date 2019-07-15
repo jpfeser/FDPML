@@ -55,9 +55,9 @@ Input cards:
 
 1. filenames
 	* flfrc1 -
-	 					`force constant file of the matrix material (should be generated via Quantum espresso). NOT IN XML FORMAT`
+	 					*force constant file of the matrix material (should be generated via Quantum espresso). NOT IN XML FORMAT* _emphasize_
 	* flfrc2 -
-						`force constant file of impurity material (should be generated via Quantum espresso). NOT IN XML FORMAT`
+						force constant file of impurity material (should be generated via Quantum espresso). NOT IN XML FORMAT
 	* mass_input -
 	 					`logical, if true masses are calculated with atomic resolution else masses are calculated based on supercell`
 	* mass_file -
