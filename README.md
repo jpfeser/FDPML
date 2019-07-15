@@ -11,13 +11,22 @@ For a more detailed mathematical discription of the mode please refer
 
 ### Dependencies
 
-1) MPI
-2) openmpi FORTRAN90 Compiler
-3) IntelMKL
+1. MPI
+1. openmpi FORTRAN90 Compiler
+1. IntelMKL
 
 Clone this repository using `git clone git@github.com:Rohit-Kakodkar/FDPML.git`
 
 Install using Makefile : `make all`
+
+Upon installation execultables will be created in `\bin` folder
+
+## Usage
+
+The method can be used to obtain 2 properties intrinsic to heat transport through nanostructured materials.
+
+1. Transmission coefficient - Please refer ![here](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.95.125434)
+2. Scattering Cross-section - Please refer ![here](https://aip.scitation.org/doi/abs/10.1063/1.5031757)
 
 
 
