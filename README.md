@@ -25,8 +25,21 @@ Upon installation execultables will be created in `\bin` folder
 
 The method can be used to obtain 2 properties intrinsic to heat transport through nanostructured materials.
 
-1. Transmission coefficient - Please refer [here](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.95.125434)
-2. Scattering Cross-section - Please refer [here](https://aip.scitation.org/doi/abs/10.1063/1.5031757)
+1. Transmission coefficient across interfaces- Please refer [here](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.95.125434)
+2. Scattering Cross-section due to nanoparticles- Please refer [here](https://aip.scitation.org/doi/abs/10.1063/1.5031757)
+
+Input parameters for simulations are specified through input cards described below
+
+All quantities whose dimensions are not explicitly specified are in RYDBERG ATOMIC UNITS. Charge is "number" charge (i.e. not multiplied by e); potentials are in energy units (i.e. they are multiplied by e).
+
+Structure of the input data:
+
+	`&filenames
+		...
+	/
+	`
+
+
 
 
 
