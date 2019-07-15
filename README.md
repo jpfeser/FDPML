@@ -92,7 +92,8 @@ Input cards:
 ## Future improvements (In progress)
 
 - Incorporate anharmonic force constants while obtaining thermal properties
--
+- Calculate scattering rates from scattering cross-sections
+- Calculate density of phonon states to obtain thermal interface conductance from transmission coefficients
 
 
 <!-- # Frequency Domain Perfectly Matched Layer
