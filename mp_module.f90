@@ -11,7 +11,7 @@ INTEGER(KIND = RP), PARAMETER :: root_process = 0 ! If you wanna mess with root 
 INTEGER(KIND = RP), PARAMETER :: io_process = 0 ! If you wanna mess with I/O processor. Set it .ge. world_size if you do not want any printed outputs
 INTEGER :: my_id, world_size = 0, comm ! mpi variables
 LOGICAL :: root_node, io_node 
-INTEGER :: mp_real, mp_complex, mp_int, mp_logical, mp_sumr, mp_sumc, mp_sumi
+INTEGER :: mp_real, mp_complex, mp_int, mp_logical, mp_sumr, mp_sumc, mp_sumi, mp_maxi
 INTEGER :: ierr
 !------------------------------
 
@@ -82,6 +82,7 @@ CONTAINS
 		CALL MPI_OP_CREATE(mp_sum_real, .true., mp_sumr, ierr)
 		CALL MPI_OP_CREATE(mp_sum_cmplx, .true., mp_sumc, ierr)
 		CALL MPI_OP_CREATE(mp_sum_int, .true., mp_sumi, ierr)
+		CALL MPI_OP_CREATE(mp_max_int, .true., mp_maxi, ierr)
 		
 		IF (root_node) THEN
 			write (stdout, *) '	'
@@ -171,6 +172,18 @@ CONTAINS
 		ENDDO 
 	END SUBROUTINE mp_sum_int
 	
+	SUBROUTINE mp_max_int(invec, inoutvec, datatype)
+		
+		INTEGER 			:: datatype
+		INTEGER(KIND = IP) 	:: invec(world_size), inoutvec(world_size)
+		INTEGER 			:: i
+		
+		DO i = 1, world_size
+			inoutvec(i) = max(invec(i), inoutvec(i))
+			return
+		END DO
+	
+	END SUBROUTINE mp_max_int
 	
 
 END MODULE mp_module

@@ -29,13 +29,13 @@
 #----------------------------------
 #                Farber parameters
 # tells cluster to assign (20) processors
-#$ -pe mpi 1
+# $ -pe mpi 1
 # tells cluster to allocate 1GB memory PER processor
-#$ -l m_mem_free=3G
+# $ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
-# $ -l exclusive=1
+#$ -l exclusive=1
 # send script to the standby queue
-#$ -l standby=1,h_rt=4:00:00
+# $ -l standby=1,h_rt=4:00:00
 # setup messaging about (b)egin, (e)nd, (a)bort, and (s) of your program
 # $ -o mpi_submit_script.sh.out
 # $ -m beas
@@ -72,6 +72,8 @@ echo "Lpoint = " $L
 echo "spoint = " $s
 echo "qpoint = " $qp
 
+PMLL=20
+
 #
 # The MPI program to execute:
 #
@@ -93,14 +95,15 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &filenames
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
-	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs_q2.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs_q2.fc'
-	mass_input = .true.
+	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
+	mass_input = .false.
+	timing_file='timing_${SGE_TASK_ID}.csv'
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 10, 10, 20
-	LPML = 30
+	PD(1) = 10, 10, 40
+	LPML = ${PMLL}
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
@@ -121,7 +124,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	spoint=$s
 /
   &solver
-	tol = 1e-4
+	tol = 3.5e-8
 	maxit = 1000000
 /
   &restartoptions
@@ -133,10 +136,10 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	scattered_energy= .false.
 /
   &plots
-	plot_K = .true.
+	plot_K = .false.
 	plot_sig = .false.
 	plot_uinc = .false.
-	plot_uscat = .true.
+	plot_uscat = .false.
 	plottingmode = 3
 /
 EOF

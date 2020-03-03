@@ -77,7 +77,7 @@ PROGRAM FDPML
 !	*****************************************************************************************
 !	Filenames and booleans
 	CHARACTER(len = 256) 			:: 	mass_file, domain_file, simulation_type, &
-										qlist_file, slist_file, Llist_file
+										qlist_file, slist_file, Llist_file, timing_file
 	INTEGER							::	spoint, Lpoint
 	REAL(KIND = RP), ALLOCATABLE	::	slist(:)
 	INTEGER, ALLOCATABLE 			:: 	Llist(:)
@@ -130,7 +130,7 @@ PROGRAM FDPML
 	REAL(KIND = RP), ALLOCATABLE 	:: 	amass_PD(:,:,:,:), amass_TD(:,:,:,:)
 	INTEGER 						:: 	n1, n2, n3, na, i, j, i1, i2, i3, &
 										nb, ia, ib, ipol, jpol ! counters
-	INTEGER 						:: 	LPML
+	INTEGER 						:: 	LPML, natoms_PML
 	COMPLEX(KIND = CP), ALLOCATABLE :: 	my_uinc(:), my_K(:), my_uscat(:)
 	INTEGER 						:: 	ityp
 	REAL(KIND = RP) 				:: 	weight, mass1, mass2, sigmamax, vg(3)
@@ -162,7 +162,7 @@ PROGRAM FDPML
 	REAL(KIND = RP), ALLOCATABLE 	:: 	xplot(:), zplot(:), uincp(:,:), uscatp(:,:), &
 										sigp(:,:), Kp(:,:)
 	INTEGER(KIND = IP)				:: 	counter1,  plottingmode, counter2, &
-										my_tatoms_in_yplane
+										my_tatoms_in_yplane, BW, maximum
 	INTEGER(KIND = IP), ALLOCATABLE :: 	borderlogic(:), tatoms_in_yplane(:), &
 										rdispls(:)
 	REAL 							:: 	plottingplane
@@ -180,7 +180,7 @@ PROGRAM FDPML
 	REAL(KIND = RP) 				:: Total_time, my_Total_time, Total_mul_time, &
 									   my_Total_time_mkl, start_mkl, finish_mkl, Total_time_mkl, &
 									   Total_comm_time
-	INTEGER				:: my_Total_elements = 0.D0, Total_elements
+	INTEGER							:: my_Total_elements = 0.D0, Total_elements
 !	*****************************************************************************************
 !	Post Processing
 	REAL(KIND = RP) 				::  my_Eleft, my_Eright, Eleft, Eright, &
@@ -190,7 +190,13 @@ PROGRAM FDPML
 	LOGICAL :: restart
 	INTEGER :: iterpause
 	CHARACTER(len = 256) :: tmp_dir, restartfile, format_string
-!
+!	*****************************************************************************************
+!	Timing Variables
+	REAL							:: 	preprocessing_time, matrix_time, solution_time, postprocessing_time
+!	REAL							:: 	my_preprocessing_time, my_matrix_time, my_solution_time, &
+!										my_postprocessing_time
+	INTEGER(KIND = IP)				:: 	my_BW
+	INTEGER							:: 	final_iter
 	
 	CALL mp_init( )
 	
@@ -203,7 +209,7 @@ PROGRAM FDPML
 !	*****************************************************************************************
 !	Read Input
 
-	NAMELIST /filenames/ mass_file, domain_file, flfrc1, flfrc2, mass_input &
+	NAMELIST /filenames/ mass_file, domain_file, flfrc1, flfrc2, mass_input, timing_file &
 			 /system/ simulation_type, PD, LPML, periodic, crystal_coordinates, &
 					  asr, wavetype, q, mode, sigmamax, mp, qpoint, nk1, nk2, nk3, &
 					  qlist_file, slist_file, Llist_file, Lpoint, spoint, file_input &
@@ -433,6 +439,9 @@ PROGRAM FDPML
 	ENDIF
 	
 	CALL MPI_BCAST(TD, 3, MPI_REAL, root_process, comm, ierr)
+
+!**	
+	CALL cpu_time(start)
 	
 !	----------------------------------------------------------------------------------------
 		
@@ -625,11 +634,16 @@ PROGRAM FDPML
 		ENDDO
 	ENDIF
 	
+!**	
+	CALL cpu_time(finish)
 	
-
+	preprocessing_time = finish - start
 	 
 !	========================================================================================= 
 	 
+!**
+	CALL cpu_time(start)
+
 !	=========================================================================================
 !	Calculate the number of atoms(rows) assigned to every processor
 !	Nomenclature :
@@ -840,7 +854,7 @@ PROGRAM FDPML
 !	Counter loop to find how much memory is needed for Alist, ilist and jlist
 	counter1 = 0	!	counter for ilist, jlist and Alist
 	counter2 = 0	!	counter for atoms connected ouside the domain
-	CALL cpu_time(start)
+!	CALL cpu_time(start)
 	DO p = 1, my_natoms
 		n = p + atoms_start(my_id+1)
 		atom_tuple = ind2sub(n, nSub)
@@ -998,11 +1012,15 @@ PROGRAM FDPML
 											  ! Amat = -(m*w**2+K) equn A3 on 
 											  !	PHYSICAL REVIEW B 95, 125434 (2017)
 
+	WRITE (stdout, '(a, I)') 'nnz = ', counter1+my_nrows
+
 	ALLOCATE(borderlogic(counter2))		  ! Defines every atom connected outside
 											  ! TD
 	
 	counter1 = 0
 	counter2 = 0
+	
+	my_BW = 0
 
 	DO p = 1, my_natoms
 		n = p + atoms_start(my_id+1)
@@ -1085,7 +1103,7 @@ PROGRAM FDPML
 														  weight/(amu_ry* &
 														  sqrt(mass1*mass2)* &
 														  w2(mode))
-														  
+										my_BW = maximum(BW, KIABS((ilist(counter1)-jlist(counter1))))				  
 										IF ((sqrt(mass1*mass2).eq.0.D0) .or. &
 											(w2(mode).eq.0.D0)) THEN
 											print *, 'HELLO'
@@ -1156,6 +1174,8 @@ PROGRAM FDPML
 										counter1 = counter1 + 1
 										ilist(counter1) = 3*n-(3-ipol)
 	                                    jlist(counter1) = 3*Location-(3-jpol)
+	                                    
+	                                    my_BW = maximum(BW, KIABS((ilist(counter1)-jlist(counter1))))
 										Alist(counter1) = IFC(ipol,jpol)* &
 														  weight/(amu_ry* &
 														  sqrt(mass1*mass2)* &
@@ -1174,7 +1194,13 @@ PROGRAM FDPML
 			ENDDO
 		ENDIF	
 	ENDDO
-
+	
+	
+!	CALL MPI_REDUCE(my_BW, BW, 1, mp_int, mp_maxi, root_node, comm, ierr)
+	
+!	IF (io_node) THEN
+!		WRITE (stdout, '(a, I)') 'Bandwidth(A)  = ', BW
+!	END IF
 !	Adding -m*w**2 part after normalizing by m*w**2. So adding -1 :-P
 	DO p = 1, my_natoms
 		n = p + atoms_start(my_id+1)
@@ -1191,17 +1217,18 @@ PROGRAM FDPML
 	IF (io_node) WRITE (stdout, *) '	'
 	IF (io_node) WRITE (stdout, *) 'DONE'
 
-	CALL cpu_time(finish)
+!	CALL cpu_time(finish)
+	
 	
 !	==========================================================================================
 !	Calculate the RHS of linear algebra problem AU = K
-	CALL cpu_time(start)
+!	CALL cpu_time(start)
 	calc_scounts_n = .true.
 	
 	CALL matvectcoo(Alist(1:counter1), ilist(1:counter1), jlist(1:counter1), &
 					counter1, my_uinc, my_K, my_nrows, everyones_rows, 'N')
 	
-	CALL cpu_time(finish)
+!	CALL cpu_time(finish)
 		
 !	Hard-wall boundary conditions
 	DO i = 1, counter2
@@ -1226,6 +1253,11 @@ PROGRAM FDPML
 			ENDIF
 		ENDDO
 	ENDDO
+	
+!**
+	CALL cpu_time(finish)
+	
+	matrix_time = finish - start
 	
 !	OPEN (unit = 666, file = 'Alist.txt', form = 'formatted')
 	
@@ -1256,17 +1288,27 @@ PROGRAM FDPML
 		read (unit = 639) my_uscat
 		close(unit = 639)
 	ENDIF
+	
+	natoms_PML = PD(1)*PD(2)*LPML
 
+	tol = tol*(real(natoms_PML))
+	WRITE(stdout, *) tol
+
+!**
 	CALL cpu_time(start)
 	start_mkl = dsecnd()
 	CALL mpibicgstabcoo (	Alist, ilist, jlist, my_uscat, my_K, my_nnz, &
 						my_nrows, nrows, everyones_rows, tol, maxit, resvec, flag, &
 						iterpause, restartfile	)
 	
-	finish_mkl = dsecnd()					
+	finish_mkl = dsecnd()
+!**				
 	CALL cpu_time(finish)
 	
 	my_Total_time = finish - start
+	
+	solution_time = my_Total_time
+	
 	my_Total_time_mkl = finish_mkl - start_mkl
 	
 	CALL MPI_REDUCE(my_Total_time, Total_time, 1, mp_real, mp_sumr, root_process, &
@@ -1276,9 +1318,22 @@ PROGRAM FDPML
 	CALL MPI_REDUCE(my_Total_comm_mkl, Total_comm_time, 1, mp_real, mp_sumr, &
 					root_process, comm, ierr)
 	
+	final_iter = 0			
+	DO i = 1, 2*maxit+1
+		IF (abs(resvec(i)) .lt. 1e-8) THEN
+			EXIT
+		END IF
+		
+		final_iter = i
+	END DO
+	
 		
 	
 !	*********************************************************************************************
+
+!**
+
+	CALL cpu_time(start)
 
 !	=============================================================================================
 !	POST-PROCESSING
@@ -1358,6 +1413,19 @@ PROGRAM FDPML
 	ENDIF
 
 !	******************************************************************************************
+
+!**
+	CALL cpu_time(finish)
+	
+	postprocessing_time = finish - start
+	
+	IF (io_node) THEN
+		open(1, file = timing_file, status = 'new') 
+	END IF
+	
+	CALL print_time(preprocessing_time, matrix_time, solution_time, postprocessing_time, &
+						PD, nrows, natoms, 1, final_iter, Transmission_coefficient)
+
 !	******************************************************************************************
 
 !	Beta phase testing
@@ -1649,6 +1717,69 @@ SUBROUTINE Group_velocity(frc, f_of_q, tau, zeu, m_loc, nr1, nr2, nr3, epsil, na
 
 	
 END SUBROUTINE Group_velocity
+
+SUBROUTINE print_time(my_preprocessing_time, my_matrix_time, my_solution_time, &
+						my_postprocessing_time, PD, nrows, natoms, file_no, final_iter, &
+						Transmission_coefficient)
+	
+	USE kinds
+	USE mp_module
+	IMPLICIT NONE
+	INCLUDE 'mpif.h' ! MPI header file
+	INCLUDE 'mkl.fi' ! MKL header fileKIABS
+	INTEGER 	:: file_no
+	REAL 	:: my_preprocessing_time, my_matrix_time, my_solution_time, my_postprocessing_time
+	REAL	:: preprocessing_time, matrix_time, solution_time, postprocessing_time
+	REAL	:: PD(3)
+	INTEGER(KIND = IP)	:: natoms, nrows
+	INTEGER				:: final_iter
+	REAL(KIND= RP)	:: Transmission_coefficient
+	
+	CALL MPI_REDUCE(my_preprocessing_time, preprocessing_time, 1, MPI_REAL, MPI_SUM, root_process, &
+					comm, ierr)
+					
+	CALL MPI_REDUCE(my_matrix_time, matrix_time, 1, MPI_REAL, MPI_SUM, root_process, &
+					comm, ierr)
+	
+	CALL MPI_REDUCE(my_solution_time, solution_time, 1, MPI_REAL, MPI_SUM, root_process, &
+					comm, ierr)
+	
+	CALL MPI_REDUCE(my_postprocessing_time, postprocessing_time, 1, MPI_REAL, MPI_SUM, root_process, &
+					comm, ierr)
+		
+	IF (io_node) THEN
+		WRITE (file_no, '(a, I)') 'PD(1),',	PD(1)
+		WRITE (file_no, '(a, I)') 'PD(2),',	PD(2)
+		WRITE (file_no, '(a, I)') 'PD(3),', PD(3)
+		WRITE (file_no, '(a, I)') 'natoms,', natoms
+		WRITE (file_no, '(a, I)') 'nrows,', nrows
+		WRITE (file_no, '(a, I)') 'total iterations,', final_iter
+		WRITE (file_no, '(a, E17.10)') 'T,', Transmission_coefficient	
+		WRITE (file_no, '(a, F10.3)')	'Preprocessing Time,', preprocessing_time/world_size
+		WRITE (file_no, '(a, F10.3)')	'Matrix Time,', matrix_time/world_size
+		WRITE (file_no, '(a, F10.3)')	'Solution Time,', solution_time/world_size
+		WRITE (file_no, '(a, F10.3)')	'Postprocessing Time,', postprocessing_time/world_size
+		WRITE (file_no, '(a, F10.3)')	'Total Time,', (preprocessing_time + matrix_time + solution_time + postprocessing_time)/world_size
+	END IF
+	
+END SUBROUTINE print_time
+
+FUNCTION maximum(i, j) result(v)
+
+!	returns the maximum of 2 numbers
+
+	USE kinds
+	IMPLICIT NONE
+	INTEGER(KIND = IP) :: i, j
+	INTEGER(KIND = IP) :: v
+	
+	IF (i .ge. j) THEN
+		v = i
+	ELSE
+		v = j
+	END IF
+
+END FUNCTION maximum
 
 !SUBROUTINE Terminate ( )
 

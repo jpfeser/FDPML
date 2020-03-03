@@ -1,14 +1,15 @@
   &filenames
 	domain_file = '/lustre/scratch/rohitk/FDPML_tmp/Domain.dat',
 	mass_file = '/lustre/scratch/rohitk/FDPML_tmp/mass.dat', 
-	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs_q2.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs_q2.fc'
-	mass_input = .true.
+	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
+	mass_input = .false.
+	timing_file='timing_1.csv'
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 10, 10, 20
-	LPML = 30
+	PD(1) = 10, 10, 40
+	LPML = 20
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
@@ -29,7 +30,7 @@
 	spoint=1
 /
   &solver
-	tol = 1e-4
+	tol = 3.5e-8
 	maxit = 1000000
 /
   &restartoptions
@@ -41,9 +42,9 @@
 	scattered_energy= .false.
 /
   &plots
-	plot_K = .true.
+	plot_K = .false.
 	plot_sig = .false.
 	plot_uinc = .false.
-	plot_uscat = .true.
+	plot_uscat = .false.
 	plottingmode = 3
 /
