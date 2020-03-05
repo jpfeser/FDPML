@@ -102,7 +102,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 10, 10, 100
+	PD(1) = 10, 10, 20
 	LPML = ${PMLL}
 	periodic = .true.
 	crystal_coordinates = .false.
@@ -139,7 +139,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	plot_K = .false.
 	plot_sig = .false.
 	plot_uinc = .false.
-	plot_uscat = .false.
+	plot_uscat = .true.
 	plottingmode = 3
 /
 EOF
