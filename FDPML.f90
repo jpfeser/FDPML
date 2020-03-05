@@ -401,7 +401,11 @@ PROGRAM FDPML
 ! 	Deciding whether to work in crystal or primitive coordinates
 !	at_conv are the lattice vectors for convectional unit cell or any other 
 !	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
-!	where n is an integer 
+!	where n is an integer
+
+!	call get_supercell(at1, tau1, ityp1, nat, z(:, mode), r_cell, na_vec, ib_vec1, &
+!							ib_vec2, natc, tauc, itypc, atc, zc, &
+!							crystal_coordinates, nr1, nr2, nr3)
 
 	IF (crystal_coordinates) THEN
 		at_conv = at1 	! If working in crystal coordinates then supercell 
@@ -1865,6 +1869,60 @@ SUBROUTINE get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 	
 	CALL MPI_BCAST(f_of_q1, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
 	CALL MPI_BCAST(f_of_q2, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
+	
+END SUBROUTINE
+
+SUBROUTINE get_supercell(at1, tau1, ityp1, nat, z, r_cell, na_vec, ib_vec1, &
+							ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
+							nr1, nr2, nr3)
+
+	USE kinds
+	USE essentials
+	IMPLICIT NONE
+	
+	LOGICAL								:: 	crystal_coordinates
+	INTEGER								::	i
+	REAL(KIND = RP)						::	at1(3,3)
+	INTEGER								::	ityp1, nat(2)
+	COMPLEX(KIND = CP)					::	z(3*nat(1))
+	REAL(KIND = RP) 					:: 	at_conv(3,3), atc(3,3)
+	INTEGER 							:: 	natsc, natc
+	REAL(KIND = RP), ALLOCATABLE 		:: 	tausc(:,:), r_cell(:,:), tauc(:,:)
+	INTEGER, ALLOCATABLE 				:: 	itypsc(:), itypc(:)
+	COMPLEX(KIND = CP), ALLOCATABLE 	:: 	zsc(:), zc(:)
+	INTEGER, ALLOCATABLE 				:: 	ib_vec1(:,:,:,:,:), ib_vec2(:,:,:,:,:), &
+											na_vec(:)
+	REAL(KIND = RP)						::	tau1(3, nat(1))
+	INTEGER								::	nr1, nr2, nr3
+	
+	IF (crystal_coordinates) THEN
+		at_conv = at1 	! If working in crystal coordinates then supercell 
+						! is the primitive cell
+	ELSE
+		at_conv(:,:) = 0.D0
+		DO i = 1, 3
+			at_conv(i,i) = 1.0_RP
+		ENDDO
+	ENDIF
+	
+
+	CALL Supercell(	at_conv, at1, tau1, ityp1, nat(1), tausc, itypsc, &
+					natsc, z, zsc, r_cell, na_vec, ib_vec1 )
+	!	___c variables listed below are current variables and are chosen based on 
+	!	the choice of coordinate system you want to work in.
+	natc = natsc
+	print *, natc
+	ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
+	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+	ib_vec2 = ib_vec1
+	tauc = tausc
+	itypc = itypsc
+	atc = at_conv
+	zc = zsc
+
+	IF (real(zc(1)).LT.0.0) THEN
+		zc = CMPLX(-1.0, 0.0, KIND = CP)*zc(:)
+	ENDIF
 	
 END SUBROUTINE
 
