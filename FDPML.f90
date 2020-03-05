@@ -265,6 +265,7 @@ PROGRAM FDPML
 	CALL MPI_BCAST(iterpause, 1, MPI_INT, root_process, comm, ierr)
 	CALL MPI_BCAST(tmp_dir, 256, MPI_CHAR, root_process, comm, ierr)
 	
+	
 	IF (my_id .lt. 10) then
 		format_string = "(a, a, a, I1, a)"
 	ELSEIF (my_id .lt. 100) THEN
@@ -272,9 +273,7 @@ PROGRAM FDPML
 	ELSE 
 		format_string = "(a, a, a, I3, a)"
 	ENDIF
-	
 	WRITE(restartfile, format_string ) trim(tmp_dir), '/', 'uscat_', my_id, '.save'
-	
 	plotting = ((plot_K) .or. (plot_sig) .or. (plot_uinc) .or. (plot_uscat))
 	
 	
@@ -282,76 +281,55 @@ PROGRAM FDPML
 !	Read qlist, slist, Llist
 	IF (root_node) THEN
 		IF (file_input) THEN
-		
 			WRITE (stdout, '(a)') '	'
 			WRITE (stdout, '(a)') '			Reading qlist file'
-			
 			OPEN(unit = 11, file = qlist_file, form = 'formatted')
 			READ(11, '(I)') nq
 			ALLOCATE(qlist(3,nq))
-			
 			DO i = 1, nq
 				READ(11, *) qlist(1,i), qlist(2,i), qlist(3,i)
 			ENDDO
-			
 			CLOSE(unit = 11)
-			
 			q = qlist(:,qpoint)
-			
 			OPEN(unit = 11, file = slist_file, form = 'formatted')
 			READ(11, '(I)') nq
 			ALLOCATE(slist(nq))
-			
 			DO i = 1, nq
 				READ(11, *) slist(i)
 			ENDDO
-			
 			CLOSE(unit = 11)
-			
 			sigmamax = slist(spoint)
-			
 			OPEN(unit = 11, file = Llist_file, form = 'formatted')
 			READ(11, '(I)') nq
 			ALLOCATE(Llist(nq))
-			
 			DO i = 1, nq
 				READ(11, *) Llist(i)
 			ENDDO
-			
 			CLOSE(unit = 11)
-			
 			LPML = Llist(Lpoint)
 		ENDIF
 	ENDIF
 	
 	IF (root_node) THEN
 		IF (mp) THEN
-		
 			CALL recips(at1, bg1)
-			
 			IF ((nk1.lt.1) .or. (nk2.lt.1) .or. (nk3.lt.1)) THEN
 				WRITE(stdout, '(a)') 'nks are not selected for MP grid'
 				STOP
 			ENDIF
-			
 			ntetra = 6 * nk1 * nk2 * nk3
 	        nqx = nk1*nk2*nk3
 	        ALLOCATE ( tetra(4,ntetra), qlist(3,nqx) )
-			
 			CALL gen_qpoints (ibrav(1), at1, bg1, nat(1), tau1, ityp1, nk1, nk2, nk3, &
 								ntetra, nqx, nq, qlist, tetra)
-			
 			q = qlist(:,qpoint)
-			
 			OPEN (unit = 66, file = 'qlist.txt', form = 'formatted')
 			WRITE(66, '(I)') nq
-			
 			DO i = 1, nq
 				WRITE(66, '(3F10.3)') qlist(1, i), qlist(2, i), qlist(3, i)
 			ENDDO
 		ENDIF
 	ENDIF	
-
 !!	----------------------------------------------------------------------------------------
 	
 !	read force constant files
@@ -361,49 +339,62 @@ PROGRAM FDPML
 	CALL readfc( flfrc2, frc2, tau2, zeu2, m_loc, ityp2, nr1, nr2, nr3, &
 				 epsil(:,:,2), nat(2), ibrav(2), alat2, at2, ntyp(2), &
 				 amass2, omega2, has_zstar(2) )
-	
-!	has_zstar(1) = .false.
-	
+				 
 	na_ifc = has_zstar(1)
 	fd = na_ifc 
+
+!!	----------------------------------------------------------------------------------------
+
+! 	In the case that the group velocity is moving away from the Transmitted PML the incident
+!	phonon mode needs to be chosen appropriately i.e. if vg(q)[3] < 0 then set q(3) = -q(3)
+!	Assuming that the PML is always oriented normal to z-dimention
+
+!	has_zstar(1) = .false.
+	
+	
 
 	ALLOCATE(w2(3*nat(1)), z(3*nat(1), 3*nat(1)))
 
 	!	Non-analytic part of force-constants
 	ALLOCATE(f_of_q1(3,3,nat(1), nat(1)), f_of_q2(3,3,nat(2),nat(2)))
+	
+	call get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
+						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
+						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
+						tau1, tau2)
 
-	IF (root_node) THEN
+!	IF (root_node) THEN
 	
-		IF (na_ifc) THEN
-			  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
-			  if(qq == 0.0) qq=1.0
-			  qhat(1)=q(1)/qq
-			  qhat(2)=q(2)/qq
-			  qhat(3)=q(3)/qq
+!		IF (na_ifc) THEN
+!			  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
+!			  if(qq == 0.0) qq=1.0
+!			  qhat(1)=q(1)/qq
+!			  qhat(2)=q(2)/qq
+!			  qhat(3)=q(3)/qq
 	
-			CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
-							 omega1, nr1,nr2,nr3,f_of_q1 )
-			CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
-							 omega2, nr1,nr2,nr3,f_of_q2 )
-		ENDIF
+!			CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
+!							 omega1, nr1,nr2,nr3,f_of_q1 )
+!			CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
+!							 omega2, nr1,nr2,nr3,f_of_q2 )
+!		ENDIF
 		
-		CALL Group_velocity	(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
-				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
-				has_zstar(1), na_ifc, fd, asr, q, vg, mode)
+!		CALL Group_velocity	(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
+!				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
+!				has_zstar(1), na_ifc, fd, asr, q, vg, mode)
 		
-		IF (vg(3).lt.0.0) THEN
-			q(3) = -q(3)
-			vg(3) = -vg(3)
-		ENDIF
+!		IF (vg(3).lt.0.0) THEN
+!			q(3) = -q(3)
+!			vg(3) = -vg(3)
+!		ENDIF
 		
-		IF (vg(3).eq.0) THEN
-			WRITE(stdout, '(a)') 'Group velocity = 0'
-			CALL MPI_ABORT(comm, errore, ierr)
-		ENDIF
+!		IF (vg(3).eq.0) THEN
+!			WRITE(stdout, '(a)') 'Group velocity = 0'
+!			CALL MPI_ABORT(comm, errore, ierr)
+!		ENDIF
 		
-	ENDIF
+!	ENDIF
 	
-	CALL MPI_BCAST(q, 3, mp_real, root_process, comm, ierr)
+!	CALL MPI_BCAST(q, 3, mp_real, root_process, comm, ierr)
 	CALL MPI_BCAST(LPML, 1, MPI_INT, root_process, comm, ierr)
 	CALL MPI_BCAST(sigmamax, 1, mp_real, root_process, comm, ierr)
 	
@@ -453,14 +444,6 @@ PROGRAM FDPML
 			CALL set_asr (asr, nr1, nr2, nr3, frc2, zeu2, &
 				nat(2), ibrav(2), tau2)
 	END IF
-	
-!	WRITE(stdout, *) '--------------------'
-!	WRITE(stdout, '(E23.15, I5)') (sqrt(w2(mode))*RY_TO_CMM1), my_id
-!	WRITE(stdout, *) '--------------------'
-
-!	maximum value of damping coefficient
-
-!	sigmamax = sigmamax/q(3)*0.1_RP
 
 	sigmamax = sigmamax*sqrt(w2(mode))/(LPML*(q(3)))
 				
@@ -1808,6 +1791,77 @@ SUBROUTINE set_defaults(mass_input, crystal_coordinates, asr, mp, qpoint, &
 !
 !	--------------------------
 
+END SUBROUTINE
+
+!SUBROUTINE get_disp()
+
+!	USE kinds
+!	USE dispersion
+!END SUBROUTINE
+
+SUBROUTINE get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
+						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
+						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
+						tau1, tau2)
+
+	USE kinds
+	USE dispersion
+	USE mp_module
+	USE rigid
+	
+	IMPLICIT NONE
+	
+	CHARACTER(len = 256)					::	asr
+	LOGICAL									:: 	na_ifc, fd, has_zstar(2)
+	REAL(KIND = RP)							:: 	qq, qhat(3), q(3), alat1,alat2, at1(3,3), at2(3,3)
+	INTEGER									::	nat(2), nr1, nr2, nr3, ibrav(2), mode, ntyp(2), errore
+	INTEGER									::	ityp1(nat(1)), ityp2(nat(2)), amass1(ntyp(1)), amass2(ntyp(2))
+	REAL(KIND = RP)							::	epsil(3,3,2), zeu1(3,3,nat(1)), zeu2(3,3,nat(2))
+	REAL(KIND = RP)							::	vg(3)
+	REAL(KIND = RP)							:: 	omega1, omega2
+	REAL(KIND = RP)							::	frc1(nr1,nr2,nr3,3,3,nat(1),nat(1)), &
+												frc2(nr1,nr2,nr3,3,3,nat(2),nat(2))
+	REAL(KIND = RP)							::	w2(3*nat(1)), f_of_q1(3,3,nat(1),nat(1)), &
+												f_of_q2(3,3,nat(2),nat(2)), tau1(3, nat(1)), tau2(3, nat(2))
+	REAL(KIND = RP), ALLOCATABLE 			:: 	m_loc(:,:)
+	
+	
+	
+
+	IF (root_node) THEN
+	
+		IF (na_ifc) THEN
+			  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
+			  if(qq == 0.0) qq=1.0
+			  qhat(1)=q(1)/qq
+			  qhat(2)=q(2)/qq
+			  qhat(3)=q(3)/qq
+	
+			CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
+							 omega1, nr1,nr2,nr3,f_of_q1 )
+			CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
+							 omega2, nr1,nr2,nr3,f_of_q2 )
+		ENDIF
+		
+		CALL Group_velocity	(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
+				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
+				has_zstar(1), na_ifc, fd, asr, q, vg, mode)
+		
+		IF (vg(3).lt.0.0) THEN
+			q(3) = -q(3)
+			vg(3) = -vg(3)
+		ENDIF
+		
+		IF (vg(3).eq.0) THEN
+			WRITE(stdout, '(a)') 'Group velocity = 0'
+			CALL MPI_ABORT(comm, errore, ierr)
+		ENDIF
+		
+	ENDIF
+	
+	CALL MPI_BCAST(q, 3, mp_real, root_process, comm, ierr)
+	
+	
 END SUBROUTINE
 
 !SUBROUTINE Terminate ( )
