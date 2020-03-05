@@ -102,7 +102,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 10, 10, 40
+	PD(1) = 10, 10, 100
 	LPML = ${PMLL}
 	periodic = .true.
 	crystal_coordinates = .false.
