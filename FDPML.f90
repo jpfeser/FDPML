@@ -276,6 +276,17 @@ PROGRAM FDPML
 	WRITE(restartfile, format_string ) trim(tmp_dir), '/', 'uscat_', my_id, '.save'
 	plotting = ((plot_K) .or. (plot_sig) .or. (plot_uinc) .or. (plot_uscat))
 	
+	CALL MPI_BCAST(LPML, 1, MPI_INT, root_process, comm, ierr)
+	CALL MPI_BCAST(sigmamax, 1, mp_real, root_process, comm, ierr)
+	
+	IF (periodic) THEN
+		TD = PD + (/ 0, 0, 2*LPML/)
+	ELSE
+		TD = PD + (/ 2*LPML, 2*LPML, 2*LPML/)
+	ENDIF
+	
+	CALL MPI_BCAST(TD, 3, MPI_REAL, root_process, comm, ierr)
+	
 	
 !!	----------------------------------------------------------------------------------------
 !	Read qlist, slist, Llist
@@ -343,6 +354,11 @@ PROGRAM FDPML
 	na_ifc = has_zstar(1)
 	fd = na_ifc 
 
+	ALLOCATE(w2(3*nat(1)), z(3*nat(1), 3*nat(1)))
+
+	!	Non-analytic part of force-constants
+	ALLOCATE(f_of_q1(3,3,nat(1), nat(1)), f_of_q2(3,3,nat(2),nat(2)))
+
 !!	----------------------------------------------------------------------------------------
 
 ! 	In the case that the group velocity is moving away from the Transmitted PML the incident
@@ -350,61 +366,11 @@ PROGRAM FDPML
 !	Assuming that the PML is always oriented normal to z-dimention
 
 !	has_zstar(1) = .false.
-	
-	
 
-	ALLOCATE(w2(3*nat(1)), z(3*nat(1), 3*nat(1)))
-
-	!	Non-analytic part of force-constants
-	ALLOCATE(f_of_q1(3,3,nat(1), nat(1)), f_of_q2(3,3,nat(2),nat(2)))
-	
 	call get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
 						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
 						tau1, tau2)
-
-!	IF (root_node) THEN
-	
-!		IF (na_ifc) THEN
-!			  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
-!			  if(qq == 0.0) qq=1.0
-!			  qhat(1)=q(1)/qq
-!			  qhat(2)=q(2)/qq
-!			  qhat(3)=q(3)/qq
-	
-!			CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
-!							 omega1, nr1,nr2,nr3,f_of_q1 )
-!			CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
-!							 omega2, nr1,nr2,nr3,f_of_q2 )
-!		ENDIF
-		
-!		CALL Group_velocity	(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
-!				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
-!				has_zstar(1), na_ifc, fd, asr, q, vg, mode)
-		
-!		IF (vg(3).lt.0.0) THEN
-!			q(3) = -q(3)
-!			vg(3) = -vg(3)
-!		ENDIF
-		
-!		IF (vg(3).eq.0) THEN
-!			WRITE(stdout, '(a)') 'Group velocity = 0'
-!			CALL MPI_ABORT(comm, errore, ierr)
-!		ENDIF
-		
-!	ENDIF
-	
-!	CALL MPI_BCAST(q, 3, mp_real, root_process, comm, ierr)
-	CALL MPI_BCAST(LPML, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(sigmamax, 1, mp_real, root_process, comm, ierr)
-	
-	IF (periodic) THEN
-		TD = PD + (/ 0, 0, 2*LPML/)
-	ELSE
-		TD = PD + (/ 2*LPML, 2*LPML, 2*LPML/)
-	ENDIF
-	
-	CALL MPI_BCAST(TD, 3, MPI_REAL, root_process, comm, ierr)
 
 !**	
 	CALL cpu_time(start)
@@ -420,21 +386,21 @@ PROGRAM FDPML
 	
 	
 	!	Non-analytic part of force-constants
-	IF (na_ifc) THEN
-		  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
-		  if(qq == 0.0) qq=1.0
-		  qhat(1)=q(1)/qq
-		  qhat(2)=q(2)/qq
-		  qhat(3)=q(3)/qq
+!	IF (na_ifc) THEN
+!		  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
+!		  if(qq == 0.0) qq=1.0
+!		  qhat(1)=q(1)/qq
+!		  qhat(2)=q(2)/qq
+!		  qhat(3)=q(3)/qq
 
-		CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
-						 omega1, nr1,nr2,nr3,f_of_q1 )
-		CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
-						 omega2, nr1,nr2,nr3,f_of_q2 )
-	ENDIF
+!		CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
+!						 omega1, nr1,nr2,nr3,f_of_q1 )
+!		CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
+!						 omega2, nr1,nr2,nr3,f_of_q2 )
+!	ENDIF
 		
-	CALL MPI_BCAST(f_of_q1, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
-	CALL MPI_BCAST(f_of_q2, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
+!	CALL MPI_BCAST(f_of_q1, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
+!	CALL MPI_BCAST(f_of_q2, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
 	
 	CALL disp(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
 				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
@@ -1850,6 +1816,19 @@ SUBROUTINE get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 		IF (vg(3).lt.0.0) THEN
 			q(3) = -q(3)
 			vg(3) = -vg(3)
+			
+			IF (na_ifc) THEN
+				  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
+				  if(qq == 0.0) qq=1.0
+				  qhat(1)=q(1)/qq
+				  qhat(2)=q(2)/qq
+				  qhat(3)=q(3)/qq
+		
+				CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
+								 omega1, nr1,nr2,nr3,f_of_q1 )
+				CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
+								 omega2, nr1,nr2,nr3,f_of_q2 )
+			ENDIF
 		ENDIF
 		
 		IF (vg(3).eq.0) THEN
@@ -1861,6 +1840,8 @@ SUBROUTINE get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 	
 	CALL MPI_BCAST(q, 3, mp_real, root_process, comm, ierr)
 	
+	CALL MPI_BCAST(f_of_q1, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
+	CALL MPI_BCAST(f_of_q2, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
 	
 END SUBROUTINE
 
