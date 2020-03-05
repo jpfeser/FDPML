@@ -359,6 +359,8 @@ PROGRAM FDPML
 	!	Non-analytic part of force-constants
 	ALLOCATE(f_of_q1(3,3,nat(1), nat(1)), f_of_q2(3,3,nat(2),nat(2)))
 
+	CALL cpu_time(start)
+
 !!	----------------------------------------------------------------------------------------
 
 ! 	In the case that the group velocity is moving away from the Transmitted PML the incident
@@ -367,49 +369,31 @@ PROGRAM FDPML
 
 !	has_zstar(1) = .false.
 
-	call get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
+!	call get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
+!						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
+!						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
+!						tau1, tau2)
+
+!!**	
+
+	
+!!	----------------------------------------------------------------------------------------
+		
+!!	Calculate dispersion relationship
+	
+!	CALL disp(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
+!				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
+!				has_zstar(1), na_ifc, fd, asr, q, w2, z)
+			
+!	IF (asr /= 'no') THEN
+!			CALL set_asr (asr, nr1, nr2, nr3, frc2, zeu2, &
+!				nat(2), ibrav(2), tau2)
+!	END IF
+
+	call get_disp(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
 						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
-						tau1, tau2)
-
-!**	
-	CALL cpu_time(start)
-	
-!	----------------------------------------------------------------------------------------
-		
-!	Calculate dispersion relationship
-
-
-				
-	! CALL MPI_BCAST(w2, 3*nat(1), mp_real, root_process, comm, ierr)
-	! CALL MPI_BCAST(z, 3*nat(1)*3*nat(1), mp_complex, root_process, comm, ierr)
-	
-	
-	!	Non-analytic part of force-constants
-!	IF (na_ifc) THEN
-!		  qq=sqrt(q(1)**2+q(2)**2+q(3)**3)
-!		  if(qq == 0.0) qq=1.0
-!		  qhat(1)=q(1)/qq
-!		  qhat(2)=q(2)/qq
-!		  qhat(3)=q(3)/qq
-
-!		CALL nonanal_ifc(nat(1), nat(1), ityp1, epsil(:,:,1), qhat, zeu1, &
-!						 omega1, nr1,nr2,nr3,f_of_q1 )
-!		CALL nonanal_ifc(nat(2), nat(2), ityp2, epsil(:,:,2), qhat, zeu2, &
-!						 omega2, nr1,nr2,nr3,f_of_q2 )
-!	ENDIF
-		
-!	CALL MPI_BCAST(f_of_q1, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
-!	CALL MPI_BCAST(f_of_q2, 9*nat(1)*nat(1), mp_real, root_process, comm, ierr)
-	
-	CALL disp(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
-				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
-				has_zstar(1), na_ifc, fd, asr, q, w2, z)
-			
-	IF (asr /= 'no') THEN
-			CALL set_asr (asr, nr1, nr2, nr3, frc2, zeu2, &
-				nat(2), ibrav(2), tau2)
-	END IF
+						tau1, tau2, z)
 
 	sigmamax = sigmamax*sqrt(w2(mode))/(LPML*(q(3)))
 				
@@ -1759,11 +1743,49 @@ SUBROUTINE set_defaults(mass_input, crystal_coordinates, asr, mp, qpoint, &
 
 END SUBROUTINE
 
-!SUBROUTINE get_disp()
+SUBROUTINE get_disp(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
+						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
+						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
+						tau1, tau2, z)
 
-!	USE kinds
-!	USE dispersion
-!END SUBROUTINE
+	USE kinds
+	USE dispersion
+	USE mp_module
+	USE rigid
+	USE sum_rule
+	IMPLICIT NONE
+	
+	CHARACTER(len = 256)					::	asr
+	LOGICAL									:: 	na_ifc, fd, has_zstar(2)
+	REAL(KIND = RP)							:: 	qq, qhat(3), q(3), alat1,alat2, at1(3,3), at2(3,3)
+	INTEGER									::	nat(2), nr1, nr2, nr3, ibrav(2), mode, ntyp(2), errore
+	INTEGER									::	ityp1(nat(1)), ityp2(nat(2))
+	REAL(KIND = RP)							::	epsil(3,3,2), zeu1(3,3,nat(1)), zeu2(3,3,nat(2))
+	REAL(KIND = RP)							::	vg(3)
+	REAL(KIND = RP)							:: 	omega1, omega2
+	REAL(KIND = RP)							::	frc1(nr1,nr2,nr3,3,3,nat(1),nat(1)), &
+												frc2(nr1,nr2,nr3,3,3,nat(2),nat(2))
+	REAL(KIND = RP)							::	w2(3*nat(1)), f_of_q1(3,3,nat(1),nat(1)), &
+												f_of_q2(3,3,nat(2),nat(2)), tau1(3, nat(1)), tau2(3, nat(2)), &
+												amass1(ntyp(1)), amass2(ntyp(2))
+	REAL(KIND = RP), ALLOCATABLE 			:: 	m_loc(:,:)
+	COMPLEX(KIND = CP)						::	z(3*nat(1), 3*nat(1))
+	
+	call get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
+						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
+						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
+						tau1, tau2)
+						
+	call disp(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
+				ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
+				has_zstar(1), na_ifc, fd, asr, q, w2, z)
+				
+	IF (asr /= 'no') THEN
+			CALL set_asr (asr, nr1, nr2, nr3, frc2, zeu2, &
+				nat(2), ibrav(2), tau2)
+	END IF
+	
+END SUBROUTINE
 
 SUBROUTINE get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
@@ -1781,14 +1803,15 @@ SUBROUTINE get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 	LOGICAL									:: 	na_ifc, fd, has_zstar(2)
 	REAL(KIND = RP)							:: 	qq, qhat(3), q(3), alat1,alat2, at1(3,3), at2(3,3)
 	INTEGER									::	nat(2), nr1, nr2, nr3, ibrav(2), mode, ntyp(2), errore
-	INTEGER									::	ityp1(nat(1)), ityp2(nat(2)), amass1(ntyp(1)), amass2(ntyp(2))
+	INTEGER									::	ityp1(nat(1)), ityp2(nat(2))
 	REAL(KIND = RP)							::	epsil(3,3,2), zeu1(3,3,nat(1)), zeu2(3,3,nat(2))
 	REAL(KIND = RP)							::	vg(3)
 	REAL(KIND = RP)							:: 	omega1, omega2
 	REAL(KIND = RP)							::	frc1(nr1,nr2,nr3,3,3,nat(1),nat(1)), &
 												frc2(nr1,nr2,nr3,3,3,nat(2),nat(2))
 	REAL(KIND = RP)							::	w2(3*nat(1)), f_of_q1(3,3,nat(1),nat(1)), &
-												f_of_q2(3,3,nat(2),nat(2)), tau1(3, nat(1)), tau2(3, nat(2))
+												f_of_q2(3,3,nat(2),nat(2)), tau1(3, nat(1)), tau2(3, nat(2)), &
+												amass1(ntyp(1)), amass2(ntyp(2))
 	REAL(KIND = RP), ALLOCATABLE 			:: 	m_loc(:,:)
 	
 	
