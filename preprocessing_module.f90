@@ -143,9 +143,11 @@ MODULE preprocessing_module
 		LOGICAL								:: 	crystal_coordinates
 		INTEGER								::	i
 		REAL(KIND = RP)						::	at1(3,3)
-		INTEGER								::	ityp1, nat(2)
+		INTEGER								::	nat(2)
 		COMPLEX(KIND = CP)					::	z(3*nat(1))
-		REAL(KIND = RP) 					:: 	at_conv(3,3), atc(3,3)
+		INTEGER								::	ityp1(nat(1))
+		REAL(KIND = RP) 					:: 	at_conv(3,3)
+		REAL								::	atc(3,3)
 		INTEGER 							:: 	natsc, natc
 		REAL(KIND = RP), ALLOCATABLE 		:: 	tausc(:,:), r_cell(:,:), tauc(:,:)
 		INTEGER, ALLOCATABLE 				:: 	itypsc(:), itypc(:)
@@ -171,9 +173,9 @@ MODULE preprocessing_module
 		!	___c variables listed below are current variables and are chosen based on 
 		!	the choice of coordinate system you want to work in.
 		natc = natsc
-		print *, natc
 		if (.not. allocated(tauc)) ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
-		if (.not. allocated(tauc)) ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+		if (.not. allocated(ib_vec2)) ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, &
+												-2*nr2:2*nr2, -2*nr3:2*nr3, natc))
 		ib_vec2 = ib_vec1
 		tauc = tausc
 		itypc = itypsc
@@ -219,7 +221,6 @@ MODULE preprocessing_module
 		print *, mass_input
 	
 		IF (mass_input) THEN
-			print *, 'Hello'
 			IF (io_node) THEN
 				open (unit  = 1, file = mass_file, form = 'unformatted')
 				read (unit = 1) amass_PD

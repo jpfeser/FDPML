@@ -361,6 +361,7 @@ PROGRAM FDPML
 	!	Non-analytic part of force-constants
 	ALLOCATE(f_of_q1(3,3,nat(1), nat(1)), f_of_q2(3,3,nat(2),nat(2)))
 
+!**
 	CALL cpu_time(start)
 
 !!	----------------------------------------------------------------------------------------
@@ -378,39 +379,9 @@ PROGRAM FDPML
 !	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
 !	where n is an integer
 
-!	call get_supercell(at1, tau1, ityp1, nat, z(:, mode), r_cell, na_vec, ib_vec1, &
-!							ib_vec2, natc, tauc, itypc, atc, zc, &
-!							crystal_coordinates, nr1, nr2, nr3)
-
-	IF (crystal_coordinates) THEN
-		at_conv = at1 	! If working in crystal coordinates then supercell 
-						! is the primitive cell
-	ELSE
-		at_conv(:,:) = 0.D0
-		DO i = 1, 3
-			at_conv(i,i) = 1.0_RP
-		ENDDO
-	ENDIF
-	
-
-	CALL Supercell(	at_conv, at1, tau1, ityp1, nat(1), tausc, itypsc, &
-					natsc, z(:,mode), zsc, r_cell, na_vec, ib_vec1 )
-	!	___c variables listed below are current variables and are chosen based on 
-	!	the choice of coordinate system you want to work in.
-	natc = natsc
-	ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
-	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
-	ib_vec2 = ib_vec1
-	tauc = tausc
-	itypc = itypsc
-	atc = at_conv
-	zc = zsc
-
-	IF (real(zc(1)).LT.0.0) THEN
-		zc = CMPLX(-1.0, 0.0, KIND = CP)*zc(:)
-	ENDIF
-
-
+	call get_supercell(at1, tau1, ityp1, nat, z(:,mode), r_cell, na_vec, ib_vec1, &
+								ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
+								nr1, nr2, nr3)
 
 !	========================================================================================
 !	Generating the primary and total domain.
@@ -423,107 +394,7 @@ PROGRAM FDPML
 
 	call gen_TD(domain_file, mass_file, amass_TD, ityp_TD, PD, TD, periodic, ntyp, &
 						amass1, amass2, natc, itypc, mass_input, LPML)
-
-!	ALLOCATE(ityp_PD(int(PD(1)), int(PD(2)), int(PD(3)), natc))
-!	if (mass_input) ALLOCATE (amass_PD(int(PD(1)), int(PD(2)), int(PD(3)), natc))
-	
-!	IF (io_node) THEN
-!		open (unit  = 1, file = domain_file, form = 'unformatted')
-!		read (unit = 1) ityp_PD
-!		close(unit = 1)
-!	ENDIF
-	
-	
-!	CALL MPI_BCAST(ityp_PD, size(ityp_PD), MPI_INT, root_process, comm, ierr)
-	
-!	IF (mass_input) THEN		
-!		IF (io_node) THEN
-!			open (unit  = 1, file = mass_file, form = 'unformatted')
-!			read (unit = 1) amass_PD
-!			close(unit = 1)
-!		ENDIF
-!		CALL MPI_BCAST(amass_PD, size(amass_PD), mp_real, root_process, comm, ierr)	
-!	ENDIF
-	
-!	center = PD/2
-	
-!	yplane = int(center(2))
-!!	----------------------------------------------------------------------------------------
-!!	Generating the Total Domain
-!!	This section adds a layer of PML of length LPML on the edges of the 
-!!	primary domain.
-!!	The Total domain defines the type of atom for every atom inside the simulation
-!!	cell
-		
-!	ALLOCATE (ityp_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
-!	ALLOCATE (amass_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
-
-!	IF (periodic) THEN
-!		DO n1 = 1, TD(1)
-!			DO n2 = 1, TD(2)
-!				DO n3 = 1, TD(3)
-!					DO na = 1, natc
-!						IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
-!							(n1.le.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
-!							(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
-!							(n2.le.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
-!							(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
-!							(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
-!!							If the atom is inside the Primary domain
-!							ityp_TD(n1,n2,n3,na)= ityp_PD(n1, n2, n3-LPML, na)
-!							IF (mass_input) THEN
-!								amass_TD(n1,n2,n3,na) = amass_PD(n1,n2,n3-LPML, na)
-!							ELSE
-!								IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
-!									amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!								ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
-!									amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!								ENDIF
-!							ENDIF
-!						ELSEIF (n3.lt.TD(3)/2) THEN
-!							ityp_TD(n1,n2,n3,na) = 1
-!							amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!						ELSEIF (n3.ge.TD(3)/2) THEN
-!							ityp_TD(n1,n2,n3,na) = 2
-!							amass_TD(n1,n2,n3,na) = amass2(itypc(na))
-!						ENDIF
-!					ENDDO
-!				ENDDO
-!			ENDDO
-!		ENDDO
-!	ELSE
-!		DO n1 = 1, TD(1)
-!			DO n2 = 1, TD(2)
-!				DO n3 = 1, TD(3)
-!					DO na = 1, natc
-!						IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
-!							(n1.lt.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
-!							(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
-!							(n2.lt.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
-!							(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
-!							(n3.lt.(TD(3)/2.D0+PD(3)/2.D0))) THEN
-!!							If the atom is inside the Primary domain
-!							ityp_TD(n1,n2,n3,na)= &
-!								ityp_PD(n1-LPML, n2-LPML, n3-LPML, na)
-!							IF (mass_input) THEN
-!								amass_TD(n1,n2,n3,na) = amass_PD(n1-LPML,n2-LPML,n3-LPML, na)
-!							ELSE
-!								IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
-!									amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!								ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
-!									amass_TD(n1,n2,n3,na) = amass2(itypc(na))
-!								ENDIF
-!							ENDIF
-!						ELSE
-!							ityp_TD(n1,n2,n3,na) = 1
-!							amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!						ENDIF
-!					ENDDO
-!				ENDDO
-!			ENDDO
-!		ENDDO
-!	ENDIF
-	
+						
 !**	
 	CALL cpu_time(finish)
 	
@@ -535,84 +406,6 @@ PROGRAM FDPML
 	CALL cpu_time(start)
 
 !	=========================================================================================
-!	Calculate the number of atoms(rows) assigned to every processor
-!	Nomenclature :
-!		natoms = Total number of atoms inside the simulation cell
-!		rows = Total number of rows of A-matrix (uinc or uscat) = 3*natoms
-!		my_* local version of the variables
-!		everyones_rows and everyones_atoms are arrays representing number of rows
-!		atoms for every processor
-!		atoms_start(n) defines the starting atom of nth processor 
-	
-	
-	
-!	natoms = size(ityp_TD)
-!	nrows = 3*natoms
-!	if (io_node) WRITE (stdout, '(a, I11)')' Total number of atoms inside simulation cell =',&
-!									natoms
-!	IF (io_node) WRITE (stdout, '(a)') '	'
-	
-!	my_natoms = natoms/world_size
-!	rem = MOD(natoms,world_size)
-	
-!	IF (my_id.gt.(world_size-rem-1)) THEN
-!		my_natoms = my_natoms+1
-!	ENDIF
-	
-!	CALL MPI_ALLGATHER(my_natoms, 1, mp_int, everyones_atoms, 1, mp_int, comm, ierr)
-	
-!	CALL calculate_displs(everyones_atoms, atoms_start)
-
-!	my_nrows = my_natoms*3
-	
-!	everyones_rows = 3*everyones_atoms
-	
-!	IF (root_node) THEN
-!		DO i =1, world_size
-!			WRITE(stdout, '(a, I7, a, I3)') ' Solving', everyones_rows(i), &
-!											' rows on processor', (i-1)
-!		ENDDO
-!		WRITE (stdout, *) '	'
-!	ENDIF
-
-!	Print a cross-sectional image of the primary domain.
-
-!	yplane = int(PD(2)/2.D0)
-	
-!	IF (io_node) THEN
-!		WRITE (stdout, *) '--------------------------------------------------------'
-!		WRITE (stdout, *) 'Cross-sectional image of PD (check if this is correct)'
-!		WRITE (stdout, *) '--------------------------------------------------------'
-!		DO n1 = 1, PD(1)
-!			DO n3 = 1, PD(3)
-!				IF (n3.eq.PD(3)) THEN
-!					write(stdout, fmt = '(I2)') ityp_PD(n1,yplane,n3,1)
-!				ELSE
-!					write(stdout, fmt = '(I2)', advance = 'no') &
-!											ityp_PD(n1,yplane,n3,1)
-!				ENDIF
-!			ENDDO
-!		ENDDO
-!	ENDIF
-	 
-!	yplane = int(TD(2)/2.D0)
-	 
-!	IF (io_node) THEN
-!		WRITE (stdout, *) '	' 
-!		WRITE (stdout, *) 'Cross-sectional image of TD (check if this is correct)'
-!		WRITE (stdout, *) '--------------------------------------------------------'
-!		DO n1 = 1, TD(1)
-!			DO n2 = 1, TD(3)
-!				IF (n2.eq.TD(3)) THEN
-!					write(stdout, fmt = '(I2)') ityp_TD(n1,yplane,n2,1)
-!				ELSE
-!					write(stdout, fmt = '(I2)', advance = 'no') &
-!												ityp_TD(n1,yplane,n2,1)
-!				ENDIF
-!			ENDDO
-!		ENDDO
-!	ENDIF
-	
 	
 	call get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
 						atoms_start, everyones_rows, TD, natc, ityp_TD)
@@ -1120,6 +913,8 @@ PROGRAM FDPML
 !	Calculate the RHS of linear algebra problem AU = K
 !	CALL cpu_time(start)
 	calc_scounts_n = .true.
+	
+	ALLOCATE(my_K(my_nrows))
 	
 	CALL matvectcoo(Alist(1:counter1), ilist(1:counter1), jlist(1:counter1), &
 					counter1, my_uinc, my_K, my_nrows, everyones_rows, 'N')

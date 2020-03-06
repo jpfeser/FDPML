@@ -135,6 +135,15 @@ CONTAINS
 	
 	SUBROUTINE get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
 						atoms_start, everyones_rows, TD, natc, ityp_TD)
+						
+!	Calculate the number of atoms(rows) assigned to every processor
+!	Nomenclature :
+!		natoms = Total number of atoms inside the simulation cell
+!		rows = Total number of rows of A-matrix (uinc or uscat) = 3*natoms
+!		my_* local version of the variables
+!		everyones_rows and everyones_atoms are arrays representing number of rows
+!		atoms for every processor
+!		atoms_start(n) defines the starting atom of nth processor 
 
 		USE kinds 
 		use, intrinsic 				:: 	iso_fortran_env, only : stdin=>input_unit, &
