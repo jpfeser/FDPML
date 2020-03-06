@@ -1,21 +1,26 @@
-MODULE mat_gen
+MODULE matgen_module
 
 	CONTAINS
-	SUBROUTINE gen_uinc(natc, nSub, my_natoms, my_nrows, zc, wavetype, my_uinc)
+	SUBROUTINE gen_uinc(natc, nSub, my_natoms, my_nrows, zc, wavetype, my_uinc, atoms_start, &
+						atc, r_cell, LPML, q)
 		
 		USE kinds
 		USE essentials
 		USE constants
+		USE mp_module
 		IMPLICIT NONE
 		
-		INTEGER								::	counter, p, n, n1, n2, n3, i, natc
-		INTEGER								::	my_natoms, my_nrows
+		INTEGER								::	counter, p, i, natc, LPML
+		INTEGER(KIND = IP)					::	my_natoms, my_nrows
 		COMPLEX(KIND = CP), ALLOCATABLE		::	my_uinc(:)
-		INTEGER								::	atom_tuple
+		INTEGER(KIND = IP)					::	atom_tuple(4)
 		COMPLEX(KIND = CP)					::	zc(3*natc)
-		REAL								::	arg
+		REAL								::	arg, atc(3,3)
 		CHARACTER(len = 256)				::	wavetype
-		INTEGER(KIND = IP)					::	nSub
+		INTEGER(KIND = IP)					::	nSub(4)
+		INTEGER(KIND = IP)					::	atoms_start(world_size), n, n1, n2, n3, na
+		REAL(KIND = RP)						::	r(3), q(3) 
+		REAL(KIND = RP)						::	r_cell(3, natc)
 		
 		
 		counter = 0
@@ -52,4 +57,4 @@ MODULE mat_gen
 		ENDDO
 		
 	END SUBROUTINE
-END MODULE mat_gen
+END MODULE matgen_module

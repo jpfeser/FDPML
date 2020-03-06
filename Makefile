@@ -23,6 +23,7 @@ MODULES		= kinds.mod \
 			gnufor2.mod \
 			COO_routines.mod \
 			preprocessing_module.mod \
+			matgen_module.mod \
 			bicg.mod 
 
 
@@ -50,6 +51,7 @@ OBJECTS		= kinds.o \
 			gnufor2.o \
 			COO_routines.o \
 			preprocessing_module.o \
+			matgen_module.o \
 			bicg.o \
 			FDPML.o
 
