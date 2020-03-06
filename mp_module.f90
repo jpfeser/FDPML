@@ -133,6 +133,55 @@ CONTAINS
 		
 	END SUBROUTINE
 	
+	SUBROUTINE get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
+						atoms_start, everyones_rows, TD, natc, ityp_TD)
+
+		USE kinds 
+		use, intrinsic 				:: 	iso_fortran_env, only : stdin=>input_unit, &
+												  stdout=>output_unit, &
+												  stderr=>error_unit
+		IMPLICIT NONE
+		INTEGER(KIND = IP) 					:: 	natoms, my_natoms, rem, my_nrows, &
+												nrows
+		INTEGER(KIND = IP)				 	:: 	everyones_atoms(world_size), &
+												atoms_start(world_size), &
+												everyones_rows(world_size)
+		INTEGER								::	natc, i
+		REAL								::	TD(3)
+		INTEGER								::	ityp_TD(int(TD(1)),int(TD(2)),int(TD(3)),natc)
+		
+		
+		natoms = size(ityp_TD)
+		nrows = 3*natoms
+		if (io_node) WRITE (stdout, '(a, I11)')' Total number of atoms inside simulation cell =',&
+										natoms
+		IF (io_node) WRITE (stdout, '(a)') '	'
+		
+		my_natoms = natoms/world_size
+		rem = MOD(natoms,world_size)
+		
+		IF (my_id.gt.(world_size-rem-1)) THEN
+			my_natoms = my_natoms+1
+		ENDIF
+		
+		CALL MPI_ALLGATHER(my_natoms, 1, mp_int, everyones_atoms, 1, mp_int, comm, ierr)
+		
+		CALL calculate_displs(everyones_atoms, atoms_start)
+	
+		my_nrows = my_natoms*3
+		
+		everyones_rows = 3*everyones_atoms
+		
+		IF (root_node) THEN
+			DO i =1, world_size
+				WRITE(stdout, '(a, I7, a, I3)') ' Solving', everyones_rows(i), &
+												' rows on processor', (i-1)
+			ENDDO
+			WRITE (stdout, *) '	'
+		ENDIF
+		
+	END SUBROUTINE
+	
 !	**********************************************************************************
 !	USER defined MPI functions
 

@@ -46,7 +46,7 @@
 #      Load any packages you need to run it
 vpkg_require openmpi/intel64
 vpkg_require gnuplot/4.6
-OPENMPI_FLAGS='-np 1'
+OPENMPI_FLAGS='-np 2'
 
 L=`expr $SGE_TASK_ID % 11`
 s=`expr $SGE_TASK_ID / 11`

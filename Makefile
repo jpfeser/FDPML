@@ -9,6 +9,7 @@ DEBUG 		= Yes
 # (with .f90 suffix) in this directory
 #
 MODULES		= kinds.mod \
+			init.mod \
 			constants.mod \
 			mp_module.mod \
 			essentials.mod \
@@ -21,6 +22,7 @@ MODULES		= kinds.mod \
 			dispersion.mod \
 			gnufor2.mod \
 			COO_routines.mod \
+			preprocessing_module.mod \
 			bicg.mod 
 
 
@@ -34,6 +36,7 @@ SOURCES		= FDPML.f90
 # above:
 #
 OBJECTS		= kinds.o \
+			init.o \
 			constants.o \
 			mp_module.o \
 			essentials.o \
@@ -46,6 +49,7 @@ OBJECTS		= kinds.o \
 			dispersion.o \
 			gnufor2.o \
 			COO_routines.o \
+			preprocessing_module.o \
 			bicg.o \
 			FDPML.o
 
