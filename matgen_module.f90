@@ -1,6 +1,9 @@
 MODULE matgen_module
 
 	CONTAINS
+	
+!	=============================================================================================
+
 	SUBROUTINE gen_uinc(natc, nSub, my_natoms, my_nrows, zc, wavetype, my_uinc, atoms_start, &
 						atc, r_cell, LPML, q)
 		
@@ -57,4 +60,73 @@ MODULE matgen_module
 		ENDDO
 		
 	END SUBROUTINE
+
+!	=========================================================================================
+
+	SUBROUTINE gen_sig(sig, my_natoms, sigmamax, LPML, periodic, nSub, atc, atom_tuple, &
+						TD, PD, atoms_start, ityp_TD, tauc, natc)
+	
+		USE kinds
+		USE mp_module
+		USE essentials
+		IMPLICIT NONE
+		INTEGER								::	counter, p, i1, i2, i3, ia, ityp, natc
+		INTEGER(KIND = IP)					::	my_natoms
+		REAL(KIND = RP)						::	sigmamax
+		LOGICAL								::	periodic
+		INTEGER(KIND = IP)					::	nSub(4), n
+		REAL								::	atc(3,3)
+		REAL(KIND = RP), ALLOCATABLE		::	sig(:,:)
+		INTEGER(KIND = IP)					::	atom_tuple(4), atoms_start(world_size)
+		REAL(KIND = RP)						::	r(3)
+		REAL								::	TD(3), PD(3)
+		INTEGER								::	ityp_TD(int(TD(1)), int(TD(2)),&
+														int(TD(3)), natc), LPML
+		REAL(KIND = RP)						::	tauc(3,natc)
+		
+		
+		
+		
+		
+		ALLOCATE(sig(my_natoms, 3))
+		sig(:,:) = 0.0_RP
+		
+		DO p = 1, my_natoms
+			n = p + atoms_start(my_id+1)
+			atom_tuple = ind2sub(n, nSub)
+			ia = atom_tuple(1)
+			i1 = atom_tuple(2)
+			i2 = atom_tuple(3)
+			i3 = atom_tuple(4)
+			ityp = ityp_TD(i1,i2,i3,ia)
+			r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3-1)*atc(:,3) + tauc(:,ia)
+			IF (r(1).lt.((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0)) THEN
+		        sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0))**2
+			ELSEIF (r(1).gt.((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0)) THEN
+				sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0))**2
+			ENDIF
+			IF (r(2).lt.((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0)) THEN
+				sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0))**2
+			ELSEIF (r(2).gt.((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0)) THEN
+				sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0))**2
+			ENDIF
+			IF (r(3).lt.((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0)) THEN
+				sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0))**2
+			ELSEIF (r(3).gt.((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0)) THEN
+				sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0))**2
+			ENDIF
+		ENDDO
+		
+		sig = sigmamax*sig/(LPML**2)
+		
+		IF (periodic) THEN
+			sig(:,1) = sig(:,3)
+			sig(:,2) = sig(:,3)
+		ELSE
+			sig(:,1) = sig(:,1) + sig(:,2) + sig(:,3)
+			sig(:,2) = sig(:,1)
+			sig(:,3) = sig(:,1)
+		ENDIF
+	END SUBROUTINE gen_sig
+	
 END MODULE matgen_module

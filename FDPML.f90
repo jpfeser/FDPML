@@ -427,6 +427,9 @@ PROGRAM FDPML
 	IF (io_node) write (stdout, *) '-----------------------------------------------------------------------'
 	IF (io_node) write (stdout, *) 'Setting up A matrix'
 
+	CALL gen_sig(sig, my_natoms, sigmamax, LPML, periodic, nSub, atc, atom_tuple, &
+						TD, PD, atoms_start, ityp_TD, tauc, natc)
+
 !	----------------------------------------------------------------------------------------
 !	Copied as is from qunatum espresso
 !	Please refer FAQ page on qunatum-espresso (phonon section, question 7.7)
@@ -471,45 +474,47 @@ PROGRAM FDPML
 !	sig(p,n) defines the value of damping coefficient for pth atom along the nth
 !	dimension
 
-	ALLOCATE(sig(my_natoms, 3))
-	sig(:,:) = 0.0_RP
 	
-	DO p = 1, my_natoms
-		n = p + atoms_start(my_id+1)
-		atom_tuple = ind2sub(n, nSub)
-		ia = atom_tuple(1)
-		i1 = atom_tuple(2)
-		i2 = atom_tuple(3)
-		i3 = atom_tuple(4)
-		ityp = ityp_TD(i1,i2,i3,ia)
-		r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3-1)*atc(:,3) + tauc(:,ia)
-		IF (r(1).lt.((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0)) THEN
-	        sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0))**2
-		ELSEIF (r(1).gt.((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0)) THEN
-			sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0))**2
-		ENDIF
-		IF (r(2).lt.((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0)) THEN
-			sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0))**2
-		ELSEIF (r(2).gt.((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0)) THEN
-			sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0))**2
-		ENDIF
-		IF (r(3).lt.((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0)) THEN
-			sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0))**2
-		ELSEIF (r(3).gt.((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0)) THEN
-			sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0))**2
-		ENDIF
-	ENDDO
+
+!	ALLOCATE(sig(my_natoms, 3))
+!	sig(:,:) = 0.0_RP
 	
-	sig = sigmamax*sig/(LPML**2)
+!	DO p = 1, my_natoms
+!		n = p + atoms_start(my_id+1)
+!		atom_tuple = ind2sub(n, nSub)
+!		ia = atom_tuple(1)
+!		i1 = atom_tuple(2)
+!		i2 = atom_tuple(3)
+!		i3 = atom_tuple(4)
+!		ityp = ityp_TD(i1,i2,i3,ia)
+!		r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3-1)*atc(:,3) + tauc(:,ia)
+!		IF (r(1).lt.((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0)) THEN
+!	        sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0))**2
+!		ELSEIF (r(1).gt.((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0)) THEN
+!			sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0))**2
+!		ENDIF
+!		IF (r(2).lt.((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0)) THEN
+!			sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0))**2
+!		ELSEIF (r(2).gt.((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0)) THEN
+!			sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0))**2
+!		ENDIF
+!		IF (r(3).lt.((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0)) THEN
+!			sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0))**2
+!		ELSEIF (r(3).gt.((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0)) THEN
+!			sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0))**2
+!		ENDIF
+!	ENDDO
 	
-	IF (periodic) THEN
-		sig(:,1) = sig(:,3)
-		sig(:,2) = sig(:,3)
-	ELSE
-		sig(:,1) = sig(:,1) + sig(:,2) + sig(:,3)
-		sig(:,2) = sig(:,1)
-		sig(:,3) = sig(:,1)
-	ENDIF
+!	sig = sigmamax*sig/(LPML**2)
+	
+!	IF (periodic) THEN
+!		sig(:,1) = sig(:,3)
+!		sig(:,2) = sig(:,3)
+!	ELSE
+!		sig(:,1) = sig(:,1) + sig(:,2) + sig(:,3)
+!		sig(:,2) = sig(:,1)
+!		sig(:,3) = sig(:,1)
+!	ENDIF
 
 !	----------------------------------------------------------------------------------------
 
