@@ -165,7 +165,7 @@ PROGRAM FDPML
 	REAL(KIND = RP), ALLOCATABLE 	:: 	xplot(:), zplot(:), uincp(:,:), uscatp(:,:), &
 										sigp(:,:), Kp(:,:)
 	INTEGER(KIND = IP)				:: 	counter1,  plottingmode, counter2, &
-										my_tatoms_in_yplane, BW, maximum
+										my_tatoms_in_yplane, BW, maximum, sig_atoms
 	INTEGER(KIND = IP), ALLOCATABLE :: 	borderlogic(:), tatoms_in_yplane(:), &
 										rdispls(:)
 	REAL 							:: 	plottingplane
@@ -290,7 +290,7 @@ PROGRAM FDPML
 	
 	CALL MPI_BCAST(TD, 3, MPI_REAL, root_process, comm, ierr)
 	
-	
+	counter2 = 0
 !!	----------------------------------------------------------------------------------------
 !	Read qlist, slist, Llist
 	IF (root_node) THEN
@@ -420,6 +420,12 @@ PROGRAM FDPML
 						atc, r_cell, LPML, q)
 						
 !	=======================================================================================
+!	Generating the damping coefficients
+
+	CALL gen_sig(sig, my_natoms, sigmamax, LPML, periodic, nSub, atc, atom_tuple, &
+						TD, PD, atoms_start, ityp_TD, tauc, natc)
+
+!	=======================================================================================
 
 !	Set up A-matrix
 
@@ -427,8 +433,6 @@ PROGRAM FDPML
 	IF (io_node) write (stdout, *) '-----------------------------------------------------------------------'
 	IF (io_node) write (stdout, *) 'Setting up A matrix'
 
-	CALL gen_sig(sig, my_natoms, sigmamax, LPML, periodic, nSub, atc, atom_tuple, &
-						TD, PD, atoms_start, ityp_TD, tauc, natc)
 
 !	----------------------------------------------------------------------------------------
 !	Copied as is from qunatum espresso
@@ -467,55 +471,6 @@ PROGRAM FDPML
 	ENDDO
 	
 	CALL MPI_BCAST(wscache, ((4*nr1+1)*(4*nr2+1)*(4*nr3+1)*nat(1)*nat(2)), mp_real, root_process, comm, ierr)
-!	----------------------------------------------------------------------------------------
-! 	Damping Coefficients
-!	Change the form of damping coefficients here i.e. if you want a cubic variation
-!	or something
-!	sig(p,n) defines the value of damping coefficient for pth atom along the nth
-!	dimension
-
-	
-
-!	ALLOCATE(sig(my_natoms, 3))
-!	sig(:,:) = 0.0_RP
-	
-!	DO p = 1, my_natoms
-!		n = p + atoms_start(my_id+1)
-!		atom_tuple = ind2sub(n, nSub)
-!		ia = atom_tuple(1)
-!		i1 = atom_tuple(2)
-!		i2 = atom_tuple(3)
-!		i3 = atom_tuple(4)
-!		ityp = ityp_TD(i1,i2,i3,ia)
-!		r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3-1)*atc(:,3) + tauc(:,ia)
-!		IF (r(1).lt.((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0)) THEN
-!	        sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0))**2
-!		ELSEIF (r(1).gt.((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0)) THEN
-!			sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0))**2
-!		ENDIF
-!		IF (r(2).lt.((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0)) THEN
-!			sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0-(PD(2)-1.D0)/2.D0))**2
-!		ELSEIF (r(2).gt.((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0)) THEN
-!			sig(p,2)= abs(r(2)-((TD(2)-1.D0)/2.D0+(PD(2)-1.D0)/2.D0))**2
-!		ENDIF
-!		IF (r(3).lt.((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0)) THEN
-!			sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0-(PD(3)-1.D0)/2.D0))**2
-!		ELSEIF (r(3).gt.((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0)) THEN
-!			sig(p,3)= abs(r(3)-((TD(3)-1.D0)/2.D0+(PD(3)-1.D0)/2.D0))**2
-!		ENDIF
-!	ENDDO
-	
-!	sig = sigmamax*sig/(LPML**2)
-	
-!	IF (periodic) THEN
-!		sig(:,1) = sig(:,3)
-!		sig(:,2) = sig(:,3)
-!	ELSE
-!		sig(:,1) = sig(:,1) + sig(:,2) + sig(:,3)
-!		sig(:,2) = sig(:,1)
-!		sig(:,3) = sig(:,1)
-!	ENDIF
-
 !	----------------------------------------------------------------------------------------
 
 !	Counter loop to find how much memory is needed for Alist, ilist and jlist
@@ -654,6 +609,16 @@ PROGRAM FDPML
 			ENDDO
 		ENDIF	
 	ENDDO
+	
+!	sig_atoms accounts for the total number of nnz needed for adding the sigma elements 
+!	to Amat
+	
+!	IF (periodic) THEN
+!		sig_atoms = 2*(LPML)*int(PD(1))*int(PD(2))*natc
+!	ELSE
+!		sig_atoms = (int(TD(1))*int(TD(2))*int(TD(3)) - &
+!						int(PD(1))*int(PD(2))-int(PD(3)))*natc 
+!	END IF
 	
 	DO p = 1, my_natoms
 		DO ipol = 1,3
@@ -884,7 +849,7 @@ PROGRAM FDPML
 	IF (io_node) WRITE (stdout, *) '	'
 	IF (io_node) WRITE (stdout, *) 'DONE'
 
-!	CALL cpu_time(finish)
+	CALL cpu_time(finish)
 	
 	
 !	==========================================================================================
@@ -1093,7 +1058,7 @@ PROGRAM FDPML
 	END IF
 	
 	CALL print_time(preprocessing_time, matrix_time, solution_time, postprocessing_time, &
-						PD, nrows, natoms, 1, final_iter, Transmission_coefficient)
+						PD, nrows, natoms, 1, final_iter, Transmission_coefficient, counter2)
 
 !	******************************************************************************************
 
@@ -1168,7 +1133,7 @@ PROGRAM FDPML
 				my_xplot(counter) = r(1)
 				my_zplot(counter) = r(3)
 				DO i = 1, 3
-					my_uincp(i, counter) = real((uinc_temp(i)), KIND = RP)
+					my_uincp(i, counter) = real(abs(uinc_temp(i)), KIND = RP)
 					my_uscatp(i, counter) = real(abs(uscat_temp(i)), KIND = RP)
 					my_sigp(i, counter) = real(abs(sig_temp(i)), KIND = RP)
 					my_Kp(i, counter) = real(abs(K_temp(i)), KIND = RP)
@@ -1389,7 +1354,7 @@ END SUBROUTINE Group_velocity
 
 SUBROUTINE print_time(my_preprocessing_time, my_matrix_time, my_solution_time, &
 						my_postprocessing_time, PD, nrows, natoms, file_no, final_iter, &
-						Transmission_coefficient)
+						Transmission_coefficient, counter2)
 	
 	USE kinds
 	USE mp_module
@@ -1400,7 +1365,7 @@ SUBROUTINE print_time(my_preprocessing_time, my_matrix_time, my_solution_time, &
 	REAL 	:: my_preprocessing_time, my_matrix_time, my_solution_time, my_postprocessing_time
 	REAL	:: preprocessing_time, matrix_time, solution_time, postprocessing_time
 	REAL	:: PD(3)
-	INTEGER(KIND = IP)	:: natoms, nrows
+	INTEGER(KIND = IP)	:: natoms, nrows, counter2
 	INTEGER				:: final_iter
 	REAL(KIND= RP)	:: Transmission_coefficient
 	
@@ -1429,6 +1394,7 @@ SUBROUTINE print_time(my_preprocessing_time, my_matrix_time, my_solution_time, &
 		WRITE (file_no, '(a, F10.3)')	'Solution Time,', solution_time/world_size
 		WRITE (file_no, '(a, F10.3)')	'Postprocessing Time,', postprocessing_time/world_size
 		WRITE (file_no, '(a, F10.3)')	'Total Time,', (preprocessing_time + matrix_time + solution_time + postprocessing_time)/world_size
+		WRITE (file_no, '(a, I)')	'counter2', counter2
 	END IF
 	
 END SUBROUTINE print_time

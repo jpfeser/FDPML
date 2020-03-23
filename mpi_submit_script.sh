@@ -136,10 +136,10 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	scattered_energy= .false.
 /
   &plots
-	plot_K = .false.
+	plot_K = .true.
 	plot_sig = .false.
-	plot_uinc = .false.
-	plot_uscat = .true.
+	plot_uinc = .true.
+	plot_uscat = .false.
 	plottingmode = 3
 /
 EOF
