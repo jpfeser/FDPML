@@ -1,14 +1,14 @@
   &filenames
 	domain_file = '/lustre/scratch/rohitk/FDPML_tmp/Domain.dat',
 	mass_file = '/lustre/scratch/rohitk/FDPML_tmp/mass.dat', 
-	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
+	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
 	mass_input = .false.
 	timing_file='timing_1.csv'
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 10, 10, 40
+	PD(1) = 11, 11, 20
 	LPML = 20
 	periodic = .true.
 	crystal_coordinates = .false.
@@ -16,17 +16,17 @@
 	wavetype = 'half'
 	q(1) = 0.0, 0.0, 0.1
 	mode = 3
-	sigmamax = 5500
+	sigmamax = 5
 	mp = .false.
 	qpoint = 1
 	nk1 = 9
 	nk2 = 9
 	nk3 = 9
-	file_input = .false.
-	qlist_file = 'qlist.txt'
-	Llist_file = 'Llist.txt'
-	slist_file = 'slist.txt'
-	Lpoint=1
+	file_input = .true.
+	qlist_file = 'qlist.csv'
+	Llist_file = 'Llist.csv'
+	slist_file = 'slist.csv'
+	Lpoint=2
 	spoint=1
 /
   &solver
@@ -45,6 +45,6 @@
 	plot_K = .false.
 	plot_sig = .false.
 	plot_uinc = .false.
-	plot_uscat = .false.
+	plot_uscat = .true.
 	plottingmode = 3
 /

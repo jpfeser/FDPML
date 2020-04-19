@@ -6,3 +6,8 @@ results_*
 timing_*
 test_input.*
 FDPML.out
+*.txt
+uscat_plot
+uinc_plot
+sig_plot
+K_plot

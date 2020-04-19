@@ -27,7 +27,7 @@ CONTAINS
 	
 	!------------------------------------------------------------------------------------
 	SUBROUTINE Supercell(	atsc, at, tau, ityp, nat, tausc, itypsc, natsc, z, zsc, &
-							r_cell, na_vec, ib_vec	)
+							r_cell, na_vec, ib_vec, nr1, nr2, nr3)
 	!------------------------------------------------------------------------------------
 	! generates a supercell defined by atsc
 		USE lapack95
@@ -65,10 +65,6 @@ CONTAINS
 		ALLOCATE(tausc(3, natsc), itypsc(natsc))
 		
 		
-		nr1 = 8
-		nr2 = 8
-		nr3 = 8
-		
 		IF (present(na_vec)) ALLOCATE(na_vec(natsc))
 		IF (present(r_cell)) ALLOCATE(r_cell(3, natsc))
 		IF (present(zsc)) ALLOCATE(zsc(3*natsc))
@@ -77,9 +73,9 @@ CONTAINS
 		counter1 = 0
 		
 					
-		DO i1 = -2*nr1,2*nr1
-			DO i2 = -2*nr2,2*nr2
-				DO i3 = -2*nr3,2*nr3
+		DO i1 = -2*natsc,2*natsc
+			DO i2 = -2*natsc,2*natsc
+				DO i3 = -2*natsc,2*natsc
 					DO na = 1, nat
 						DO i = 1, 3
 							r(i) = i1*at(i,1) + i2*at(i,2) + i3*at(i,3) + tau(i,na)
@@ -111,10 +107,7 @@ CONTAINS
 		IF (counter.ne.natsc) WRITE(*,*) 'WARNING: conventional unit cell might not be correct'
 		
 		IF (counter.lt.natsc) WRITE(*,*) 'WARNING: Might need to increase the value of nr1 in this code (Supercell in essentials.f90)'
-			
-		nr1 = 2
-		nr2 = 2
-		nr3 = 2
+
 		
 		IF (present(ib_vec)) ALLOCATE(ib_vec(nat, -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natsc))
 		

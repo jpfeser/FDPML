@@ -1,5 +1,5 @@
 set terminal postscript landscape color
-set output "K_plot"
+set output "uscat_plot"
 set border linewidth 1.5
 set style line 1 lc rgb '#0060ad' pt 7 ps 1.0 lt 1 lw 2
 set nokey

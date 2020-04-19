@@ -29,13 +29,13 @@
 #----------------------------------
 #                Farber parameters
 # tells cluster to assign (20) processors
-# $ -pe mpi 1
+#$ -pe mpi 10
 # tells cluster to allocate 1GB memory PER processor
 # $ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
-#$ -l exclusive=1
+# $ -l exclusive=1
 # send script to the standby queue
-# $ -l standby=1,h_rt=4:00:00
+#$ -l standby=1,h_rt=4:00:00
 # setup messaging about (b)egin, (e)nd, (a)bort, and (s) of your program
 # $ -o mpi_submit_script.sh.out
 # $ -m beas
@@ -46,7 +46,7 @@
 #      Load any packages you need to run it
 vpkg_require openmpi/intel64
 vpkg_require gnuplot/4.6
-OPENMPI_FLAGS='-np 1'
+OPENMPI_FLAGS='-np 10'
 
 L=`expr $SGE_TASK_ID % 11`
 s=`expr $SGE_TASK_ID / 11`
@@ -95,14 +95,14 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &filenames
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
-	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
+	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
 	mass_input = .false.
 	timing_file='timing_${SGE_TASK_ID}.csv'
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 10, 10, 40
+	PD(1) = 11, 11, 20
 	LPML = ${PMLL}
 	periodic = .true.
 	crystal_coordinates = .false.
@@ -110,18 +110,18 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	wavetype = 'half'
 	q(1) = 0.0, 0.0, 0.1
 	mode = 3
-	sigmamax = 5500
+	sigmamax = 5
 	mp = .false.
-	qpoint = $qp
+	qpoint = 1
 	nk1 = 9
 	nk2 = 9
 	nk3 = 9
-	file_input = .false.
-	qlist_file = 'qlist.txt'
-	Llist_file = 'Llist.txt'
-	slist_file = 'slist.txt'
-	Lpoint=$L
-	spoint=$s
+	file_input = .true.
+	qlist_file = 'qlist.csv'
+	Llist_file = 'Llist.csv'
+	slist_file = 'slist.csv'
+	Lpoint=2
+	spoint=1
 /
   &solver
 	tol = 3.5e-8
@@ -139,7 +139,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	plot_K = .false.
 	plot_sig = .false.
 	plot_uinc = .false.
-	plot_uscat = .false.
+	plot_uscat = .true.
 	plottingmode = 3
 /
 EOF

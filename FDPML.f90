@@ -197,6 +197,8 @@ PROGRAM FDPML
 !										my_postprocessing_time
 	INTEGER(KIND = IP)				:: 	my_BW
 	INTEGER							:: 	final_iter
+	LOGICAL							::	scattering_Xsec
+	REAL(KIND = RP)					::	Jinc, Xsec, V
 	
 	CALL mp_init( )
 	
@@ -215,7 +217,7 @@ PROGRAM FDPML
 					  qlist_file, slist_file, Llist_file, Lpoint, spoint, file_input &
 			 /solver/ tol, maxit &
 			 /restartoptions/ restart, iterpause, tmp_dir, &
-			 /postprocessing/ calc_TC, scattered_energy &
+			 /postprocessing/ calc_TC, scattered_energy, scattering_Xsec &
 			 /plots/ plot_K, plot_sig, plot_uinc, plot_uscat, plottingmode
 
 !	----------------------------			 
@@ -241,6 +243,7 @@ PROGRAM FDPML
 	iterpause = 1000
 	calc_TC = .false.
 	scattered_energy = .false.
+	scattering_Xsec = .false.
 	plot_K = .false.
 	plot_sig = .false.
 	plot_uinc = .false.
@@ -507,7 +510,7 @@ PROGRAM FDPML
 	
 
 	CALL Supercell(	at_conv, at1, tau1, ityp1, nat(1), tausc, itypsc, &
-					natsc, z(:,mode), zsc, r_cell, na_vec, ib_vec1 )
+					natsc, z(:,mode), zsc, r_cell, na_vec, ib_vec1, nr1, nr2, nr3 )
 	!	___c variables listed below are current variables and are chosen based on 
 	!	the choice of coordinate system you want to work in.
 	natc = natsc
@@ -1247,9 +1250,9 @@ PROGRAM FDPML
 				counter1 = counter1 + 1
 				ilist(counter1) = 3*n-(3-ipol)
 				jlist(counter1) = 3*n-(3-ipol)
-				Alist(counter1) = CMPLX(sig(p,ipol), 0.0_RP, KIND = CP)**2 - &
+				Alist(counter1) = CMPLX(sig(p,ipol)/sqrt(w2(mode)), 0.0_RP, KIND = CP)**2 - &
 											2*CMPLX(0.0_RP, 1.0_RP, KIND = CP) * &
-											CMPLX(sig(p,ipol), 0.0_RP, KIND = CP)
+											CMPLX(sig(p,ipol)/sqrt(w2(mode)), 0.0_RP, KIND = CP)
 			ENDIF
 		ENDDO
 	ENDDO
@@ -1355,12 +1358,12 @@ PROGRAM FDPML
 			na = na_vec(ia)
 			IF (i3.lt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
-					my_Eleft= my_Eleft + amass1(ityp1(na))*abs(sig(p,ipol))* &
+					my_Eleft= my_Eleft + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ELSEIF (i3.gt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
-					my_Eright= my_Eright + amass2(ityp2(na))*abs(sig(p,ipol))* &
+					my_Eright= my_Eright + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ENDIF
@@ -1393,13 +1396,13 @@ PROGRAM FDPML
 			na = na_vec(ia)
 			IF (ityp.eq.1) THEN
 				DO ipol = 1,3
-					my_Escat = my_Escat + amass1(ityp1(na))*abs(sig(p,ipol))* &
+					my_Escat = my_Escat + abs(sig(p,ipol))* &
 											abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ENDIF
 			IF (ityp.eq.2) THEN
 				DO ipol = 1,3
-					my_Escat = my_Escat + amass2(ityp1(na))*abs(sig(p,ipol))* &
+					my_Escat = my_Escat + abs(sig(p,ipol))* &
 											abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ENDIF
@@ -1408,8 +1411,11 @@ PROGRAM FDPML
 	
 	CALL MPI_REDUCE(my_Escat, Escat, 1, mp_real, mp_sumr, root_process, comm, ierr)
 
-	IF (flag.eq.1) THEN
-		Escat = 0.0
+	IF (io_node) THEN
+		IF (scattering_Xsec) THEN
+			Jinc = nrm2(vg)/(V*nat(1))*nrm2(abs(z(:,mode)))**2
+			Xsec = Escat/Jinc
+		ENDIF 
 	ENDIF
 
 !	******************************************************************************************
@@ -1419,12 +1425,12 @@ PROGRAM FDPML
 	
 	postprocessing_time = finish - start
 	
-	IF (io_node) THEN
-		open(1, file = timing_file, status = 'new') 
-	END IF
+!	IF (io_node) THEN
+!		open(1, file = timing_file, status = 'new') 
+!	END IF
 	
-	CALL print_time(preprocessing_time, matrix_time, solution_time, postprocessing_time, &
-						PD, nrows, natoms, 1, final_iter, Transmission_coefficient)
+!	CALL print_time(preprocessing_time, matrix_time, solution_time, postprocessing_time, &
+!						PD, nrows, natoms, 1, final_iter, Transmission_coefficient)
 
 !	******************************************************************************************
 
@@ -1442,6 +1448,7 @@ PROGRAM FDPML
 		WRITE (stdout, '(a, E17.10)')	'!,T,', Transmission_coefficient
 		WRITE (stdout, '(a, E17.10)')	'!,Total_E,', (Eright + Eleft)
 		WRITE (stdout, '(a, E17.10)')	'!Escat', Escat
+		WRITE (stdout, '(a, E17.10)')	'!Scattering Xsec', Xsec
 		WRITE (stdout, '(a, F10.3)')	'!,Time,', Total_time/(world_size)
 		WRITE (stdout, '(a)') '============================================================='
 	ENDIF
