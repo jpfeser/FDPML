@@ -1231,6 +1231,7 @@ PROGRAM FDPML
 	CALL matvectcoo(Alist(1:counter1), ilist(1:counter1), jlist(1:counter1), &
 					counter1, my_uinc, my_K, my_nrows, everyones_rows, 'N')
 	
+	WRITE(*, '(a, I, I, I)') 'nnz = ', my_id, my_nnz, counter1 
 !	CALL cpu_time(finish)
 		
 !	Hard-wall boundary conditions
@@ -1295,7 +1296,6 @@ PROGRAM FDPML
 	natoms_PML = PD(1)*PD(2)*LPML
 
 	tol = tol*(real(natoms_PML))
-	WRITE(stdout, *) tol
 
 !**
 	CALL cpu_time(start)

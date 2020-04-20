@@ -95,8 +95,8 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &filenames
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
-	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
+	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
 	mass_input = .false.
 	timing_file='timing_${SGE_TASK_ID}.csv'
 /
@@ -116,7 +116,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	nk1 = 9
 	nk2 = 9
 	nk3 = 9
-	file_input = .true.
+	file_input = .false.
 	qlist_file = 'qlist.csv'
 	Llist_file = 'Llist.csv'
 	slist_file = 'slist.csv'
