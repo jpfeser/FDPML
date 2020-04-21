@@ -934,9 +934,9 @@ PROGRAM FDPML
 				counter1 = counter1 + 1
 				ilist(counter1) = 3*n-(3-ipol)
 				jlist(counter1) = 3*n-(3-ipol)
-				Alist(counter1) = CMPLX(sig(p,ipol), 0.0_RP, KIND = CP)**2 - &
+				Alist(counter1) = CMPLX(sig(p,ipol)/sqrt(w2(mode)), 0.0_RP, KIND = CP)**2 - &
 											2*CMPLX(0.0_RP, 1.0_RP, KIND = CP) * &
-											CMPLX(sig(p,ipol), 0.0_RP, KIND = CP)
+											CMPLX(sig(p,ipol)/sqrt(w2(mode)), 0.0_RP, KIND = CP)
 			ENDIF
 		ENDDO
 	ENDDO
@@ -1042,12 +1042,12 @@ PROGRAM FDPML
 			na = na_vec(ia)
 			IF (i3.lt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
-					my_Eleft= my_Eleft + amass1(ityp1(na))*abs(sig(p,ipol))* &
+					my_Eleft= my_Eleft + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ELSEIF (i3.gt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
-					my_Eright= my_Eright + amass2(ityp2(na))*abs(sig(p,ipol))* &
+					my_Eright= my_Eright + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ENDIF
@@ -1080,13 +1080,13 @@ PROGRAM FDPML
 			na = na_vec(ia)
 			IF (ityp.eq.1) THEN
 				DO ipol = 1,3
-					my_Escat = my_Escat + amass1(ityp1(na))*abs(sig(p,ipol))* &
+					my_Escat = my_Escat + abs(sig(p,ipol))* &
 											abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ENDIF
 			IF (ityp.eq.2) THEN
 				DO ipol = 1,3
-					my_Escat = my_Escat + amass2(ityp1(na))*abs(sig(p,ipol))* &
+					my_Escat = my_Escat + abs(sig(p,ipol))* &
 											abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
 			ENDIF

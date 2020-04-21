@@ -106,10 +106,10 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'full'
+	wavetype = 'half'
 	q(1) = 0.0, 0.0, 0.1
 	mode = 3
-	sigmamax = 5500
+	sigmamax = 5
 /
   &qlists
 	q_from_file = .false.
@@ -127,10 +127,10 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	scattered_energy= .true.
 /
   &plots
-	plot_K = .true.
+	plot_K = .false.
 	plot_sig = .false.
 	plot_uinc = .false.
-	plot_uscat = .false.
+	plot_uscat = .true.
 	plottingmode = 3
 /
   &calibrate
