@@ -125,6 +125,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &postprocessing
 	calc_TC = .true.
 	scattered_energy= .true.
+	scattering_Xsec = .true.
 /
   &plots
 	plot_K = .false.

@@ -205,6 +205,7 @@ PROGRAM FDPML
 	LOGICAL							::	q_from_file
 	REAL(KIND = RP), ALLOCATABLE	::	w2list(:,:), qlist_from_file(:,:)
 	COMPLEX(KIND = CP), ALLOCATABLE	::	zclist(:,:)
+	REAL(KIND =RP)					::	Xsec, Jinc, V
 	
 	CALL mp_init( )
 	
@@ -1097,6 +1098,16 @@ PROGRAM FDPML
 
 	IF (flag.eq.1) THEN
 		Escat = 0.0
+	ENDIF
+
+	CALL cell_volume(at1, 1.D0, V)
+	
+	IF (io_node) THEN
+		IF (scattering_Xsec) THEN
+			Jinc = nrm2(vg)/(V*nat(1))*nrm2(abs(z(:,mode)))**2
+			print *, Jinc*TD(1)*TD(2)/Escat
+			Xsec = Escat/Jinc
+		ENDIF 
 	ENDIF
 
 !	******************************************************************************************
