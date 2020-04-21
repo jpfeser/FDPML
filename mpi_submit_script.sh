@@ -107,7 +107,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'half'
+	wavetype = 'full'
 	q(1) = 0.0, 0.0, 0.1
 	mode = 3
 	sigmamax = 5500

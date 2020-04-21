@@ -38,36 +38,20 @@ CONTAINS
 		REAL(KIND = RP) :: atsc(3,3), at(3,3), V, Vsc, r(3), tau_temp(3), r_temp(3)
 		REAL(KIND = RP), INTENT (IN) :: tau(3,nat)
 		INTEGER, INTENT(IN) :: ityp(nat)
-		INTEGER, ALLOCATABLE :: itypsc(:)
-		REAL(KIND = RP), ALLOCATABLE :: tausc(:,:)
+		INTEGER				:: itypsc(natsc)
+		REAL(KIND = RP)		:: tausc(3,natsc)
 		INTEGER :: counter, counter1, nr1, nr2, nr3, nsc, i1, i2, i3, na, &
 					i, nb, j, ia
-		COMPLEX(KIND = CP), optional :: z(3*nat)
-		COMPLEX(KIND = CP), optional, ALLOCATABLE :: zsc(:)
-		REAL(KIND = RP), optional, ALLOCATABLE :: r_cell(:,:)
-		INTEGER, optional, ALLOCATABLE :: ib_vec(:,:,:,:,:), na_vec(:)
+		COMPLEX(KIND = CP)	:: z(3*nat)
+		COMPLEX(KIND = CP)	:: zsc(3*natsc)
+		REAL(KIND = RP)		:: r_cell(3, natsc)
+		INTEGER				:: ib_vec(nat, -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natsc),&
+								na_vec(:)
 		LOGICAL :: logic
 		INTEGER :: sta, check
 		
-		CALL cell_volume(at, 1.D0, V)
 		
-		CALL cell_volume(atsc, 1.D0, Vsc)
-		
-		IF ((Vsc/V-NINT(Vsc/V)).gt.1.0E-4) THEN
-			WRITE(*, *) 'ERROR : Volume of super cell ~= n * Volume of primitive lattice'
-			STOP
-		ENDIF
-		
-		nsc = NINT(Vsc/V)
-		
-		natsc = nat*nsc
-		
-		ALLOCATE(tausc(3, natsc), itypsc(natsc))
-		
-		
-		IF (present(na_vec)) ALLOCATE(na_vec(natsc))
-		IF (present(r_cell)) ALLOCATE(r_cell(3, natsc))
-		IF (present(zsc)) ALLOCATE(zsc(3*natsc))
+
 
 		counter= 0
 		counter1 = 0
@@ -83,21 +67,17 @@ CONTAINS
 						r = mldivide(atsc, r, 3)
 						IF ((r(1).ge.0) .and. (r(2).ge.0) .and. (r(3).ge.0) &
 						   &.and. (r(1).lt.1) .and. (r(2).lt.1) .and. (r(3).lt.1)) THEN
-								counter = counter +1
-								tausc(:,counter) = r(1)*atsc(:,1) + r(2)*atsc(:,2) + r(3)*atsc(:,3)
-								itypsc(counter) = ityp(na)
-								IF (present(na_vec))na_vec(counter) = na
-								IF (present(zsc)) THEN
-									DO i = 1, 3
-										counter1 = counter1+1
-										zsc(counter1) = z(3*na-(3-i))
-									ENDDO
-								ENDIF
-								IF (present(r_cell)) THEN
-									DO i = 1,3
-										r_cell (i, counter) = i1*at(i,1) + i2*at(i,2) + i3*at(i,3)
-									ENDDO
-								ENDIF
+							counter = counter +1
+							tausc(:,counter) = r(1)*atsc(:,1) + r(2)*atsc(:,2) + r(3)*atsc(:,3)
+							itypsc(counter) = ityp(na)
+							na_vec(counter) = na
+							DO i = 1, 3
+								counter1 = counter1+1
+								zsc(counter1) = z(3*na-(3-i))
+							ENDDO
+							DO i = 1,3
+								r_cell (i, counter) = i1*at(i,1) + i2*at(i,2) + i3*at(i,3)
+							ENDDO
 						ENDIF
 					ENDDO
 				ENDDO
@@ -107,46 +87,42 @@ CONTAINS
 		IF (counter.ne.natsc) WRITE(*,*) 'WARNING: conventional unit cell might not be correct'
 		
 		IF (counter.lt.natsc) WRITE(*,*) 'WARNING: Might need to increase the value of nr1 in this code (Supercell in essentials.f90)'
-
-		IF (present(ib_vec)) ALLOCATE(ib_vec(nat, -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natsc))
 		
-		IF (present(ib_vec)) ib_vec(:,:,:,:,:) = -1
+		ib_vec(:,:,:,:,:) = -1
 
-		IF (present(ib_vec)) THEN
-			DO ia = 1, natsc
-				DO i1 = -2*nr1, 2*nr1
-					DO i2 = -2*nr2, 2*nr2
-						DO i3 = -2*nr3, 2*nr3
-							DO nb = 1, nat
-								DO i = 1, 3
-									r(i) = i1*at(i,1) + i2*at(i,2) + i3*at(i,3) + tau(i,nb) + r_cell(i,ia)
-								ENDDO
+		DO ia = 1, natsc
+			DO i1 = -2*nr1, 2*nr1
+				DO i2 = -2*nr2, 2*nr2
+					DO i3 = -2*nr3, 2*nr3
+						DO nb = 1, nat
+							DO i = 1, 3
+								r(i) = i1*at(i,1) + i2*at(i,2) + i3*at(i,3) + tau(i,nb) + r_cell(i,ia)
+							ENDDO
 !								r = mldivide(atsc, r, 3)
-								tau_temp = r - floor(r)
-								check = 0
-								DO na = 1, natsc
-									logic = .true.
-									DO i = 1, 3
-										IF (abs(tau_temp(i) - tausc(i, na)).le.1E-3) THEN
-											logic = (logic .and. (.true.))
-										ELSE
-											logic = .false.
-										ENDIF
-									ENDDO
-									IF (logic) THEN
-										ib_vec(nb,i3,i2,i1,ia) = na
-										check = check + 1
+							tau_temp = r - floor(r)
+							check = 0
+							DO na = 1, natsc
+								logic = .true.
+								DO i = 1, 3
+									IF (abs(tau_temp(i) - tausc(i, na)).le.1E-3) THEN
+										logic = (logic .and. (.true.))
+									ELSE
+										logic = .false.
 									ENDIF
 								ENDDO
-								IF (check.ne.1) THEN
-									WRITE (stdout, '(a)') 'WARNING : Supercell is not calculated correctly'
+								IF (logic) THEN
+									ib_vec(nb,i3,i2,i1,ia) = na
+									check = check + 1
 								ENDIF
-							ENDDO	
-						ENDDO
+							ENDDO
+							IF (check.ne.1) THEN
+								WRITE (stdout, '(a)') 'WARNING : Supercell is not calculated correctly'
+							ENDIF
+						ENDDO	
 					ENDDO
 				ENDDO
 			ENDDO
-		ENDIF
+		ENDDO
 	END SUBROUTINE Supercell
 	
 	!====================================================================!

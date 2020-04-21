@@ -6,6 +6,50 @@ MODULE preprocessing_module
 	CONTAINS
 	
 !	====================================================================================================
+
+	SUBROUTINE get_natsc(at, atc, nat, natsc, crystal_coordinates)
+		
+		USE essentials
+		IMPLICIT NONE
+		
+		REAL(KIND = RP)		::	Vsc, V, at(3,3), atsc(3,3)
+		REAL				::	atc(3,3)
+		INTEGER				::	natsc, nsc, nat
+		INTEGER				::	i
+		LOGICAL				::	crystal_coordinates
+		
+		
+		IF (crystal_coordinates) THEN
+			atc = at 	! If working in crystal coordinates then supercell 
+							! is the primitive cell
+		ELSE
+			atc(:,:) = 0.D0
+			DO i = 1, 3
+				atc(i,i) = 1.0_RP
+			ENDDO
+		ENDIF
+		
+		atsc = atc
+		
+		CALL cell_volume(at, 1.D0, V)
+		
+		CALL cell_volume(atsc, 1.D0, Vsc)
+		
+				
+		IF ((Vsc/V-NINT(Vsc/V)).gt.1.0E-4) THEN
+			WRITE(*, *) 'ERROR : Volume of super cell ~= n * Volume of primitive lattice'
+			STOP
+		ENDIF
+		
+
+		
+		nsc = NINT(Vsc/V)
+		
+		natsc = nat*nsc
+		
+	END SUBROUTINE get_natsc
+	
+!	====================================================================================================
 	
 	SUBROUTINE get_disp(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
@@ -146,41 +190,25 @@ MODULE preprocessing_module
 		INTEGER								::	nat(2)
 		COMPLEX(KIND = CP)					::	z(3*nat(1))
 		INTEGER								::	ityp1(nat(1))
-		REAL(KIND = RP) 					:: 	at_conv(3,3)
+		REAL(KIND = RP) 					:: 	atsc(3,3)
 		REAL								::	atc(3,3)
-		INTEGER 							:: 	natsc, natc
-		REAL(KIND = RP), ALLOCATABLE 		:: 	tausc(:,:), r_cell(:,:), tauc(:,:)
-		INTEGER, ALLOCATABLE 				:: 	itypsc(:), itypc(:)
-		COMPLEX(KIND = CP), ALLOCATABLE 	:: 	zsc(:), zc(:)
-		INTEGER, ALLOCATABLE 				:: 	ib_vec1(:,:,:,:,:), ib_vec2(:,:,:,:,:), &
-												na_vec(:)
+		INTEGER 							:: 	natc
+		REAL(KIND = RP)				 		:: 	tausc(3, natc), r_cell(3, natc), tauc(3,natc)
+		INTEGER				 				:: 	itypc(natc)
+		COMPLEX(KIND = CP)				 	:: 	zsc(3*natc), zc(3*natc)
+		INTEGER				 				:: 	ib_vec1(nat(1), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc), &
+												ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc), &
+												na_vec(natc)
 		REAL(KIND = RP)						::	tau1(3, nat(1))
 		INTEGER								::	nr1, nr2, nr3
-		
-		IF (crystal_coordinates) THEN
-			at_conv = at1 	! If working in crystal coordinates then supercell 
-							! is the primitive cell
-		ELSE
-			at_conv(:,:) = 0.D0
-			DO i = 1, 3
-				at_conv(i,i) = 1.0_RP
-			ENDDO
-		ENDIF
-		
 	
-		CALL Supercell(	at_conv, at1, tau1, ityp1, nat(1), tausc, itypsc, &
-						natsc, z, zsc, r_cell, na_vec, ib_vec1, nr1, nr2, nr3 )
+		atsc = atc
+		CALL Supercell(	atsc, at1, tau1, ityp1, nat(1), tauc, itypc, &
+						natc, z, zc, r_cell, na_vec, ib_vec1, nr1, nr2, nr3 )
 		!	___c variables listed below are current variables and are chosen based on 
 		!	the choice of coordinate system you want to work in.
-		natc = natsc
-		if (.not. allocated(tauc)) ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
-		if (.not. allocated(ib_vec2)) ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, &
-												-2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+		
 		ib_vec2 = ib_vec1
-		tauc = tausc
-		itypc = itypsc
-		atc = at_conv
-		zc = zsc
 	
 		IF (real(zc(1)).LT.0.0) THEN
 			zc = CMPLX(-1.0, 0.0, KIND = CP)*zc(:)

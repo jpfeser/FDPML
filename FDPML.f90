@@ -380,6 +380,14 @@ PROGRAM FDPML
 !	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
 !	where n is an integer
 
+	CALL get_natsc(at1, atc, nat(1), natc, crystal_coordinates)
+
+	ALLOCATE(na_vec(natc))
+	ALLOCATE(r_cell(3, natc))
+	ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
+	ALLOCATE(ib_vec1(nat(1), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+
 	call get_supercell(at1, tau1, ityp1, nat, z(:,mode), r_cell, na_vec, ib_vec1, &
 								ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
 								nr1, nr2, nr3)
