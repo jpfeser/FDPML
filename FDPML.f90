@@ -286,18 +286,7 @@ PROGRAM FDPML
 	WRITE(restartfile, format_string ) trim(tmp_dir), '/', 'uscat_', my_id, '.save'
 	plotting = ((plot_K) .or. (plot_sig) .or. (plot_uinc) .or. (plot_uscat))
 	
-	CALL MPI_BCAST(LPML, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(sigmamax, 1, mp_real, root_process, comm, ierr)
 	
-	IF (periodic) THEN
-		TD = PD + (/ 0, 0, 2*LPML/)
-	ELSE
-		TD = PD + (/ 2*LPML, 2*LPML, 2*LPML/)
-	ENDIF
-	
-	CALL MPI_BCAST(TD, 3, MPI_REAL, root_process, comm, ierr)
-	
-	counter2 = 0
 !!	----------------------------------------------------------------------------------------
 !	Read qlist, slist, Llist
 	IF (root_node) THEN
@@ -352,6 +341,19 @@ PROGRAM FDPML
 		ENDIF
 	ENDIF	
 !!	----------------------------------------------------------------------------------------
+	
+	CALL MPI_BCAST(LPML, 1, MPI_INT, root_process, comm, ierr)
+	CALL MPI_BCAST(sigmamax, 1, mp_real, root_process, comm, ierr)
+	
+	IF (periodic) THEN
+		TD = PD + (/ 0, 0, 2*LPML/)
+	ELSE
+		TD = PD + (/ 2*LPML, 2*LPML, 2*LPML/)
+	ENDIF
+	
+	CALL MPI_BCAST(TD, 3, MPI_REAL, root_process, comm, ierr)
+	
+	counter2 = 0
 	
 !	read force constant files
 	CALL readfc( flfrc1, frc1, tau1, zeu1, m_loc, ityp1, nr1, nr2, nr3, &
