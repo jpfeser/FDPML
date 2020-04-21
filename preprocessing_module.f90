@@ -169,7 +169,7 @@ MODULE preprocessing_module
 		
 	
 		CALL Supercell(	at_conv, at1, tau1, ityp1, nat(1), tausc, itypsc, &
-						natsc, z, zsc, r_cell, na_vec, ib_vec1 )
+						natsc, z, zsc, r_cell, na_vec, ib_vec1, nr1, nr2, nr3 )
 		!	___c variables listed below are current variables and are chosen based on 
 		!	the choice of coordinate system you want to work in.
 		natc = natsc

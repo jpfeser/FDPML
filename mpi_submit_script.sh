@@ -46,7 +46,7 @@
 #      Load any packages you need to run it
 vpkg_require openmpi/intel64
 vpkg_require gnuplot/4.6
-OPENMPI_FLAGS='-np 1'
+OPENMPI_FLAGS='-np 20'
 
 L=`expr $SGE_TASK_ID % 11`
 s=`expr $SGE_TASK_ID / 11`
@@ -95,14 +95,14 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &filenames
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
-	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
+	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
 	mass_input = .false.
 	timing_file='timing_${SGE_TASK_ID}.csv'
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 10, 10, 20
+	PD(1) = 11, 11, 20
 	LPML = ${PMLL}
 	periodic = .true.
 	crystal_coordinates = .false.
