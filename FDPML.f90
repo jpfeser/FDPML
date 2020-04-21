@@ -203,6 +203,8 @@ PROGRAM FDPML
 	LOGICAL							::	scattering_Xsec
 	CHARACTER(len = 256) 			::	q_file
 	LOGICAL							::	q_from_file
+	REAL(KIND = RP), ALLOCATABLE	::	w2list(:,:), qlist_from_file(:,:)
+	COMPLEX(KIND = CP), ALLOCATABLE	::	zclist(:,:)
 	
 	CALL mp_init( )
 	
@@ -295,12 +297,12 @@ PROGRAM FDPML
 			WRITE (stdout, '(a)') '			Reading qlist file'
 			OPEN(unit = 11, file = qlist_file, form = 'formatted')
 			READ(11, '(I)') nq
-			ALLOCATE(qlist(3,nq))
+			ALLOCATE(qlist_from_file(3,nq))
 			DO i = 1, nq
-				READ(11, *) qlist(1,i), qlist(2,i), qlist(3,i)
+				READ(11, *) qlist_from_file(1,i), qlist_from_file(2,i), qlist_from_file(3,i)
 			ENDDO
 			CLOSE(unit = 11)
-			q = qlist(:,qpoint)
+			q = qlist_from_file(:,qpoint)
 			OPEN(unit = 11, file = slist_file, form = 'formatted')
 			READ(11, '(I)') nq
 			ALLOCATE(slist(nq))
@@ -373,6 +375,33 @@ PROGRAM FDPML
 
 !**
 	CALL cpu_time(start)
+	
+	IF (io_node) THEN
+		IF (.not. q_from_file) THEN
+			nq = 1
+			ALLOCATE(qlist(3, nq))
+			qlist(:,1) = q
+		ELSE
+			WRITE (stdout, '(a)') '	'
+			WRITE (stdout, '(a)') '			Reading qlist file'
+			OPEN(unit = 11, file = q_file, form = 'formatted')
+			READ(11, '(I)') nq
+			ALLOCATE(qlist(3,nq))
+			DO i = 1, nq
+				READ(11, *) qlist(1,i), qlist(2,i), qlist(3,i)
+			ENDDO
+			CLOSE(unit = 11)
+		END IF
+	END IF
+	
+	CALL MPI_BCAST(nq, 1, MPI_INT, root_process, comm, ierr)
+	if (.not. io_node) ALLOCATE(qlist(3,nq))
+	CALL MPI_BCAST(qlist, 3*nq, mp_real, root_process, comm, ierr)
+
+	ALLOCATE(w2list(3*nat(1), nq))
+
+!**
+	CALL cpu_time(start)
 
 !!	----------------------------------------------------------------------------------------
 
@@ -383,24 +412,30 @@ PROGRAM FDPML
 	ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
 	ALLOCATE(ib_vec1(nat(1), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
 	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+	ALLOCATE(zclist(3*natc, nq))
 	
-	call get_disp(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
-						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
-						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
-						tau1, tau2, z)
-
+	DO qpoint = 1, nq
+		q(:) = qlist(:,qpoint)
+		call get_disp(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
+							nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
+							zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
+							tau1, tau2, z)
+					
+	!	----------------------------------------------------------------------------------------
+	! 	Deciding whether to work in crystal or primitive coordinates
+	!	at_conv are the lattice vectors for convectional unit cell or any other 
+	!	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
+	!	where n is an integer
+	
+		call get_supercell(at1, tau1, ityp1, nat, z(:,mode), r_cell, na_vec, ib_vec1, &
+									ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
+									nr1, nr2, nr3)
+	
+		zclist(:,qpoint) = zc(:)
+	
+	ENDDO
+	
 	sigmamax = sigmamax*sqrt(w2(mode))/(LPML*(q(3)))
-				
-!	----------------------------------------------------------------------------------------
-! 	Deciding whether to work in crystal or primitive coordinates
-!	at_conv are the lattice vectors for convectional unit cell or any other 
-!	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
-!	where n is an integer
-
-
-	call get_supercell(at1, tau1, ityp1, nat, z(:,mode), r_cell, na_vec, ib_vec1, &
-								ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
-								nr1, nr2, nr3)
 
 !	========================================================================================
 !	Generating the primary and total domain.
@@ -434,13 +469,13 @@ PROGRAM FDPML
 
 	nSub = (/ natc, int(TD(1)), int(TD(2)), int(TD(3)) /)
 	
-	call gen_uinc(natc, nSub, my_natoms, my_nrows, zc, wavetype, my_uinc, atoms_start, &
-						atc, r_cell, LPML, q)
+	call gen_uinc(natc, nSub, my_natoms, my_nrows, zclist, wavetype, my_uinc, atoms_start, &
+						atc, r_cell, LPML, qlist, nq)
 						
 !	=======================================================================================
 !	Generating the damping coefficients
 
-	CALL gen_sig(sig, my_natoms, sigmamax, LPML, periodic, nSub, atc, atom_tuple, &
+	CALL gen_sig(sig, my_natoms, sigmamax, LPML, periodic, atc, atom_tuple, &
 						TD, PD, atoms_start, ityp_TD, tauc, natc)
 
 !	=======================================================================================

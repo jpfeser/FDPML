@@ -4,8 +4,8 @@ MODULE matgen_module
 	
 !	=============================================================================================
 
-	SUBROUTINE gen_uinc(natc, nSub, my_natoms, my_nrows, zc, wavetype, my_uinc, atoms_start, &
-						atc, r_cell, LPML, q)
+	SUBROUTINE gen_uinc(natc, nSub, my_natoms, my_nrows, zclist, wavetype, my_uinc, atoms_start, &
+						atc, r_cell, LPML, qlist, nq)
 		
 		USE kinds
 		USE essentials
@@ -13,49 +13,59 @@ MODULE matgen_module
 		USE mp_module
 		IMPLICIT NONE
 		
-		INTEGER								::	counter, p, i, natc, LPML
+		INTEGER								::	counter, p, i, natc, LPML, nq
 		INTEGER(KIND = IP)					::	my_natoms, my_nrows
 		COMPLEX(KIND = CP), ALLOCATABLE		::	my_uinc(:)
 		INTEGER(KIND = IP)					::	atom_tuple(4)
-		COMPLEX(KIND = CP)					::	zc(3*natc)
-		REAL								::	arg, atc(3,3)
+		COMPLEX(KIND = CP)					::	zc(3*natc), zclist(3*natc,nq)
+		REAL								::	arg
 		CHARACTER(len = 256)				::	wavetype
 		INTEGER(KIND = IP)					::	nSub(4)
 		INTEGER(KIND = IP)					::	atoms_start(world_size), n, n1, n2, n3, na
-		REAL(KIND = RP)						::	r(3), q(3) 
+		REAL(KIND = RP)						::	r(3), q(3), qlist(3, nq)
 		REAL(KIND = RP)						::	r_cell(3, natc)
+		REAL								::	atc(3,3)
+		INTEGER								::	qpoint
 		
 		
-		counter = 0
+		
+		
 		ALLOCATE(my_uinc(my_nrows))
-	
-		DO p = 1,my_natoms
-			n = p + atoms_start(my_id+1)
-			atom_tuple = ind2sub(n, nSub) 	!	convert a 1-D indexial scheme to a 3-D.
-											!	(Find exact location of nth atom in 3-D
-											!	space) 
-			na = atom_tuple(1)
-			n1 = atom_tuple(2)
-			n2 = atom_tuple(3)
-			n3 = atom_tuple(4)
-			! Location from origin
-			r = (n1-1)*atc(:,1) + (n2-1)*atc(:,2) + (n3-1)*atc(:,3) 
-			r = r + r_cell(:,na)
-			arg = tpi*(q(1)*r(1) + q(2)*r(2) + q(3)*r(3))
-			DO i= 1, 3
-			counter = counter + 1 
-			! wave with amplitude = 1
-				IF (wavetype .eq. 'full') THEN
-					my_uinc(counter)= zc(3*na-(3-i))* &
-										CMPLX(COS(arg),-SIN(arg),KIND=CP)
-				ELSEIF (wavetype .eq. 'half') THEN
-					IF (n3.lt.LPML) THEN
-						my_uinc(counter)= zc(3*na-(3-i))* &
-											CMPLX(COS(arg),-SIN(arg),KIND=CP)
-					ELSE
-						my_uinc(counter) = CMPLX(0.0_RP, 0.0_RP, KIND = CP)
+		
+		my_uinc(:) = 0.0_RP
+		
+		DO qpoint = 1, nq
+			q = qlist(:,qpoint)
+			zc = zclist(:, qpoint)
+			counter = 0
+			DO p = 1,my_natoms
+				n = p + atoms_start(my_id+1)
+				atom_tuple = ind2sub(n, nSub) 	!	convert a 1-D indexial scheme to a 3-D.
+												!	(Find exact location of nth atom in 3-D
+												!	space) 
+				na = atom_tuple(1)
+				n1 = atom_tuple(2)
+				n2 = atom_tuple(3)
+				n3 = atom_tuple(4)
+				! Location from origin
+				r = (n1-1)*atc(:,1) + (n2-1)*atc(:,2) + (n3-1)*atc(:,3) 
+				r = r + r_cell(:,na)
+				arg = tpi*(q(1)*r(1) + q(2)*r(2) + q(3)*r(3))
+				DO i= 1, 3
+				counter = counter + 1 
+				! wave with amplitude = 1
+					IF (wavetype .eq. 'full') THEN
+						my_uinc(counter)= my_uinc(counter) + zc(3*na-(3-i))* &
+											CMPLX(COS(arg),-SIN(arg),KIND=CP) / nq**2
+					ELSEIF (wavetype .eq. 'half') THEN
+						IF (n3.lt.LPML) THEN
+							my_uinc(counter)= my_uinc(counter) + zc(3*na-(3-i))* &
+												CMPLX(COS(arg),-SIN(arg),KIND=CP) / nq**2
+						ELSE
+							my_uinc(counter) = my_uinc(counter) + CMPLX(0.0_RP, 0.0_RP, KIND = CP)
+						ENDIF
 					ENDIF
-				ENDIF
+				ENDDO
 			ENDDO
 		ENDDO
 		
@@ -63,7 +73,7 @@ MODULE matgen_module
 
 !	=========================================================================================
 
-	SUBROUTINE gen_sig(sig, my_natoms, sigmamax, LPML, periodic, nSub, atc, atom_tuple, &
+	SUBROUTINE gen_sig(sig, my_natoms, sigmamax, LPML, periodic, atc, atom_tuple, &
 						TD, PD, atoms_start, ityp_TD, tauc, natc)
 !	generate the damping coefficients for every atom inside the simulation domain						
 
@@ -89,6 +99,7 @@ MODULE matgen_module
 		
 		
 		
+		nSub = (/ natc, int(TD(1)), int(TD(2)), int(TD(3)) /)
 		
 		ALLOCATE(sig(my_natoms, 3))
 		sig(:,:) = 0.0_RP
