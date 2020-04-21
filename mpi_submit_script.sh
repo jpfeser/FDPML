@@ -98,7 +98,6 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
 	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
 	mass_input = .false.
-	timing_file='timing_${SGE_TASK_ID}.csv'
 /
   &system
 	simulation_type = 'interface'
@@ -107,42 +106,44 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'full'
+	wavetype = 'half'
 	q(1) = 0.0, 0.0, 0.1
 	mode = 3
 	sigmamax = 5500
-	mp = .false.
-	qpoint = $qp
-	nk1 = 9
-	nk2 = 9
-	nk3 = 9
-	file_input = .false.
-	qlist_file = 'qlist.txt'
-	Llist_file = 'Llist.txt'
-	slist_file = 'slist.txt'
-	Lpoint=$L
-	spoint=$s
+/
+  &qlists
+	q_from_file = .false.
+	q_file = 'q_file.csv'
 /
   &solver
 	tol = 3.5e-8
 	maxit = 1000000
 /
   &restartoptions
-	tmp_dir='${TMP_DIR}'
+	tmp_dir='${TMP_DIR}' 
 /
-
   &postprocessing
 	calc_TC = .true.
-	scattered_energy= .false.
+	scattered_energy= .true.
 /
   &plots
 	plot_K = .true.
 	plot_sig = .false.
-	plot_uinc = .true.
+	plot_uinc = .false.
 	plot_uscat = .false.
 	plottingmode = 3
 /
+  &calibrate
+	file_input = .false.
+	qlist_file = 'qlist.csv'
+	Llist_file = 'Llist.csv'
+	slist_file = 'slist.csv'
+	Lpoint=$L
+	spoint=$s
+	qpoint=$qp
+/
 EOF
+
 
 
 mpirun -quiet ${OPENMPI_FLAGS} $MY_EXE < test_input.${SGE_TASK_ID} > output_test.o${SGE_TASK_ID}

@@ -200,6 +200,9 @@ PROGRAM FDPML
 !										my_postprocessing_time
 	INTEGER(KIND = IP)				:: 	my_BW
 	INTEGER							:: 	final_iter
+	LOGICAL							::	scattering_Xsec
+	CHARACTER(len = 256) 			::	q_file
+	LOGICAL							::	q_from_file
 	
 	CALL mp_init( )
 	
@@ -212,27 +215,32 @@ PROGRAM FDPML
 !	*****************************************************************************************
 !	Read Input
 
-	NAMELIST /filenames/ mass_file, domain_file, flfrc1, flfrc2, mass_input, timing_file &
+	NAMELIST /filenames/ mass_file, domain_file, flfrc1, flfrc2, mass_input &
 			 /system/ simulation_type, PD, LPML, periodic, crystal_coordinates, &
-					  asr, wavetype, q, mode, sigmamax, mp, qpoint, nk1, nk2, nk3, &
-					  qlist_file, slist_file, Llist_file, Lpoint, spoint, file_input &
+					  asr, wavetype, q, mode, sigmamax &
+			 /qlists/ q_from_file, q_file &
 			 /solver/ tol, maxit &
 			 /restartoptions/ restart, iterpause, tmp_dir, &
-			 /postprocessing/ calc_TC, scattered_energy &
-			 /plots/ plot_K, plot_sig, plot_uinc, plot_uscat, plottingmode
-
-	Call set_defaults(mass_input, crystal_coordinates, asr, mp, qpoint, &
-						nk1, nk2, nk3, file_input, qlist_file, slist_file, Llist_file, &
+			 /postprocessing/ calc_TC, scattered_energy, scattering_Xsec &
+			 /plots/ plot_K, plot_sig, plot_uinc, plot_uscat, plottingmode &
+			 /calibrate/ qlist_file, slist_file, Llist_file, Lpoint, spoint, file_input, &
+							qpoint
+			 
+	Call set_defaults(mass_input, crystal_coordinates, asr, qpoint, &
+						file_input, qlist_file, slist_file, Llist_file, &
 						Lpoint, spoint, tol, maxit, restart, iterpause, calc_TC, &
-						scattered_energy, plot_K, plot_sig, plot_uinc, plot_uscat)
+						scattered_energy, scattering_Xsec, plot_K, plot_sig, plot_uinc, plot_uscat, q_from_file, &
+						q_file)
 	
 	IF (root_node) THEN
 		READ(stdin, filenames)
 		READ(stdin, system)
+		READ(stdin, qlists)
 		READ(stdin, solver)
 		READ(stdin, restartoptions)
 		READ(stdin, postprocessing)
 		READ(stdin, plots)
+		READ(stdin, calibrate)
 	ENDIF
 
 	CALL MPI_BCAST(mass_file, 256, MPI_CHAR, root_process, comm, ierr)
@@ -250,11 +258,9 @@ PROGRAM FDPML
 !	CALL MPI_BCAST(q, 3, mp_real, root_process, comm, ierr)
 	CALL MPI_BCAST(mode, 1, MPI_INT, root_process, comm, ierr)
 !	CALL MPI_BCAST(sigmamax, 1, mp_real, root_process, comm, ierr)
-	CALL MPI_BCAST(mp, 1, mp_logical, root_process, comm, ierr)
+	CALL MPI_BCAST(q_from_file, 1, mp_logical, root_process, comm, ierr)
+	CALL MPI_BCAST(q_file, 256, MPI_CHAR, root_process, comm, ierr)
 	CALL MPI_BCAST(qpoint, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(nk1, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(nk2, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(nk3, 1, MPI_INT, root_process, comm, ierr)
 	CALL MPI_BCAST(calc_TC, 1, mp_logical, root_process, comm, ierr)
 	CALL MPI_BCAST(scattered_energy, 1, mp_logical, root_process, comm, ierr)
 	CALL MPI_BCAST(plot_K, 1, mp_logical, root_process, comm, ierr)
@@ -267,6 +273,7 @@ PROGRAM FDPML
 	CALL MPI_BCAST(restart, 1, mp_logical, root_process, comm, ierr)
 	CALL MPI_BCAST(iterpause, 1, MPI_INT, root_process, comm, ierr)
 	CALL MPI_BCAST(tmp_dir, 256, MPI_CHAR, root_process, comm, ierr)
+	CALL MPI_BCAST(scattering_Xsec, 1, mp_logical, root_process, comm, ierr)
 	
 	
 	IF (my_id .lt. 10) then
@@ -367,6 +374,14 @@ PROGRAM FDPML
 
 !!	----------------------------------------------------------------------------------------
 
+	CALL get_natsc(at1, atc, nat(1), natc, crystal_coordinates)
+
+	ALLOCATE(na_vec(natc))
+	ALLOCATE(r_cell(3, natc))
+	ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
+	ALLOCATE(ib_vec1(nat(1), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
+	
 	call get_disp(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 						nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
 						zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
@@ -380,13 +395,6 @@ PROGRAM FDPML
 !	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
 !	where n is an integer
 
-	CALL get_natsc(at1, atc, nat(1), natc, crystal_coordinates)
-
-	ALLOCATE(na_vec(natc))
-	ALLOCATE(r_cell(3, natc))
-	ALLOCATE (tauc(3,natc), itypc(natc), zc(3*natc))
-	ALLOCATE(ib_vec1(nat(1), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
-	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
 
 	call get_supercell(at1, tau1, ityp1, nat, z(:,mode), r_cell, na_vec, ib_vec1, &
 								ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
@@ -1061,12 +1069,12 @@ PROGRAM FDPML
 	
 	postprocessing_time = finish - start
 	
-	IF (io_node) THEN
-		open(1, file = timing_file, status = 'new') 
-	END IF
+!	IF (io_node) THEN
+!		open(1, file = timing_file, status = 'new') 
+!	END IF
 	
-	CALL print_time(preprocessing_time, matrix_time, solution_time, postprocessing_time, &
-						PD, nrows, natoms, 1, final_iter, Transmission_coefficient, counter2)
+!	CALL print_time(preprocessing_time, matrix_time, solution_time, postprocessing_time, &
+!						PD, nrows, natoms, 1, final_iter, Transmission_coefficient, counter2)
 
 !	******************************************************************************************
 

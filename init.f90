@@ -5,10 +5,11 @@ MODULE init
 	
 !	===========================================================================================
 	
-	SUBROUTINE set_defaults(mass_input, crystal_coordinates, asr, mp, qpoint, &
-						nk1, nk2, nk3, file_input, qlist_file, slist_file, Llist_file, &
+	SUBROUTINE set_defaults(mass_input, crystal_coordinates, asr, qpoint, &
+						file_input, qlist_file, slist_file, Llist_file, &
 						Lpoint, spoint, tol, maxit, restart, iterpause, calc_TC, &
-						scattered_energy, plot_K, plot_sig, plot_uinc, plot_uscat)
+						scattered_energy, scattering_Xsec, plot_K, plot_sig, plot_uinc, plot_uscat, q_from_file, &
+						q_file)
 
 		USE kinds
 		IMPLICIT NONE
@@ -17,12 +18,14 @@ MODULE init
 											qlist_file, slist_file, Llist_file, asr
 		LOGICAL							::	plot_K, plot_sig, plot_uinc, plot_uscat, calc_TC, &
 											scattered_energy, restart, mass_input, crystal_coordinates, &
-											mp, file_input
+											mp, file_input, scattering_Xsec
 		INTEGER							::	iterpause
 		REAL (KIND = RP) 				:: 	tol
 		INTEGER(KIND = 4) 				:: 	maxit, flag
 		INTEGER							::	spoint, Lpoint
 		INTEGER							::	qpoint, nk1, nk2, nk3
+		LOGICAL							::	q_from_file
+		CHARACTER(len = 256)			::	q_file
 		
 		
 	
@@ -33,11 +36,7 @@ MODULE init
 		mass_input = .false.
 		crystal_coordinates = .false.
 		asr = 'simple'
-		mp = .false.
 		qpoint = 1
-		nk1 = 4
-		nk2 = 4
-		nk3 = 4
 		file_input = .false.
 		qlist_file = 'NA'
 		slist_file = 'NA'
@@ -54,6 +53,9 @@ MODULE init
 		plot_sig = .false.
 		plot_uinc = .false.
 		plot_uscat = .false.
+		q_from_file = .false.
+		q_file = 'NA'
+		scattering_Xsec = .false.
 	!
 	!	--------------------------
 	
