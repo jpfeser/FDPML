@@ -29,13 +29,13 @@
 #----------------------------------
 #                Farber parameters
 # tells cluster to assign (20) processors
-# $ -pe mpi 1
+#$ -pe mpi 1
 # tells cluster to allocate 1GB memory PER processor
 # $ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
-#$ -l exclusive=1
+# $ -l exclusive=1
 # send script to the standby queue
-# $ -l standby=1,h_rt=4:00:00
+#$ -l standby=1,h_rt=4:00:00
 # setup messaging about (b)egin, (e)nd, (a)bort, and (s) of your program
 # $ -o mpi_submit_script.sh.out
 # $ -m beas
@@ -46,7 +46,7 @@
 #      Load any packages you need to run it
 vpkg_require openmpi/intel64
 vpkg_require gnuplot/4.6
-OPENMPI_FLAGS='-np 20'
+OPENMPI_FLAGS='-np 1'
 
 L=`expr $SGE_TASK_ID % 11`
 s=`expr $SGE_TASK_ID / 11`
