@@ -95,8 +95,8 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &filenames
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
-	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
+	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
 	mass_input = .false.
 /
   &system
@@ -106,13 +106,13 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'half'
-	q(1) = 0.0, 0.0, 0.1
+	wavetype = 'full'
+	q(1) = 0.0, 0.1, 0.1
 	mode = 3
-	sigmamax = 5
+	sigmamax = 2
 /
   &qlists
-	q_from_file = .false.
+	q_from_file = .true.
 	q_file = 'q_file.csv'
 /
   &solver
