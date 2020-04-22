@@ -1,4 +1,6 @@
-# Frequency Domain Perfectly Matched Layer (FDPML)
+# Frequency Domain Perfectly Matched Layer (FDPML) - version 1.0
+
+Version 1.0 solves for only singular modes without wave superposition 
 
 ## Introduction
 
