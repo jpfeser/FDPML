@@ -988,6 +988,11 @@ PROGRAM FDPML
 	CALL mpibicgstabcoo (	Alist, ilist, jlist, my_uscat, my_K, my_nnz, &
 						my_nrows, nrows, everyones_rows, tol, maxit, resvec, flag, &
 						iterpause, restartfile	)
+						
+	CALL MPI_BARRIER(comm, ierr)
+	OPEN(unit = 639, file = restartfile, form = 'unformatted')
+	WRITE(639) my_uscat
+	CLOSE(unit = 639)
 	
 	finish_mkl = dsecnd()
 !**				
