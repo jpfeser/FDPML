@@ -67,7 +67,7 @@ PROGRAM FDPML
 	use, intrinsic :: iso_fortran_env, only : stdin=>input_unit, &
 											  stdout=>output_unit, &
 											  stderr=>error_unit
-	USE constants, ONLY : tpi, amu_ry, RY_TO_CMM1
+	USE constants, ONLY : tpi, amu_ry, RY_TO_CMM1, RY_TO_THZ, BOHR_RADIUS_SI
 											  
 	IMPLICIT NONE
 	INCLUDE 'mpif.h' ! MPI header file
@@ -358,7 +358,7 @@ PROGRAM FDPML
 	
 	counter2 = 0
 	
-!	read force constant files
+!	read force constant files (located io_modules.f90)
 	CALL readfc( flfrc1, frc1, tau1, zeu1, m_loc, ityp1, nr1, nr2, nr3, &
 				 epsil(:,:,1), nat(1), ibrav(1), alat1, at1, ntyp(1), &
 				 amass1, omega1, has_zstar(1) )
@@ -417,6 +417,7 @@ PROGRAM FDPML
 	
 	DO qpoint = 1, nq
 		q(:) = qlist(:,qpoint)
+		! get_disp: see preprocessing_module.f90
 		call get_disp(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 							nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
 							zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
@@ -1146,6 +1147,18 @@ PROGRAM FDPML
 		WRITE (stdout, '(a, E17.10)')	'!,Total_E,', (Eright + Eleft)
 		WRITE (stdout, '(a, E17.10)')	'!Escat', Escat
 		WRITE (stdout, '(a, F10.3)')	'!,Time,', Total_time/(world_size)
+		WRITE (stdout, '(a)') '============================================================='
+	ENDIF
+	
+		IF (root_node) THEN
+		WRITE (stdout, '(a)') '=================Conventional Units=========================='
+		WRITE (stdout, '(a1, a18, F10.3, a, F10.3, a, F10.3)') 	'!',',vg (m/s),', vg(1)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, &
+															',', vg(2)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, & 
+															',', vg(3)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',lambda_inc (nm),', alat1/norm2(q)*BOHR_RADIUS_SI*1d9
+		WRITE (stdout, '(a1, a18, F10.3)') 	'!',',LPML (nm),', LPML*alat1*BOHR_RADIUS_SI*1d9
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',sigmamax (THz),', sigmamax*RY_TO_THZ
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',w (THz),', sqrt(w2(mode))*RY_TO_THZ
 		WRITE (stdout, '(a)') '============================================================='
 	ENDIF
 	
