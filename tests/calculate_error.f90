@@ -13,18 +13,19 @@ PROGRAM calculate_error
 											  stderr=>error_unit
 	IMPLICIT NONE
 	INCLUDE 'mkl.fi' ! MKL header file
-	
 	CHARACTER(len = 256)					::	filename, ref_filename, tmp_dir, flfrc, &
 												format_string
-	REAL(KIND = RP)							::	PD, TD
-	INTEGER(KIND = IP)						::	LPML, natoms, nrows, nrowsm1
+	REAL(KIND = RP)							::	PD(3), TD(3)
+	INTEGER(KIND = IP)						::	natoms, nrows, nrowsm1
 	LOGICAL									::	periodic, crystal_coordinates
-	REAL(KIND = RP)							::	at, atc
+	REAL(KIND = RP)							::	at(3,3)
+	REAL									::	atc(3,3)
 	INTEGER									::	nat, natc
 	INTEGER									::	nprocs
-	INTEGER(KIND = IP), ALLOCATABLE			::	everyones_rows
-	REAL(KIND = RP), ALLOCATABLE			::	uscat_calc(:), uscat_ref(:)
+	INTEGER(KIND = IP), ALLOCATABLE			::	everyones_rows(:)
+	COMPLEX(KIND = CP), ALLOCATABLE			::	uscat_calc(:), uscat_ref(:)
 	REAL(KIND = RP)							::	error, tol
+	INTEGER									::	p, LPML
 	
 	tol = 1e-6
 	
@@ -34,11 +35,13 @@ PROGRAM calculate_error
 	
 	ALLOCATE(everyones_rows(nprocs))
 			 
-	CALL readfc( flfrc1, at )
+	CALL readfc( flfrc, at )
 			 
 	CALL get_natsc(at, atc, nat, natc, crystal_coordinates)
 	
 	natoms = int(TD(1)*TD(2)*TD(3)*natc)
+	nrows = 3*natoms
+	ALLOCATE(uscat_calc(nrows), uscat_ref(nrows))
 	
 	tol = tol*natoms
 	
@@ -51,7 +54,7 @@ PROGRAM calculate_error
 	ENDIF
 	
 	nrowsm1 = 1
-	DO p = 1, nprocs
+	DO p = 0, nprocs-1
 		IF (p .lt. 10) then
 			format_string = "(a, a, a, I1, a)"
 		ELSEIF (p.lt. 100) THEN
@@ -59,20 +62,20 @@ PROGRAM calculate_error
 		ELSE 
 			format_string = "(a, a, a, I3, a)"
 		ENDIF
-		nrows = everyones_rows(p)
-		WRITE(filename, format) trim(tmp_dir), '/', 'uscat_', my_id, '.save'
+		nrows = everyones_rows(p+1)
+		WRITE(filename, format_string) trim(tmp_dir), '/', 'uscat_', p, '.save'
 		open (unit  = 639, file = filename, form = 'unformatted')
 		read (unit = 639) uscat_calc(nrowsm1:nrows)
 		close(unit = 639)
 		nrowsm1 = nrows+1
-	ENDIF
+	END DO
 	
 	open (unit  = 639, file = ref_filename, form = 'unformatted')
 	read (unit = 639) uscat_ref
 	close(unit = 639)
 	
-	CALL clean_uscat(uscat_calc, TD, PD, periodic)
-	CALL clean_uscat(uscat_ref, TD, PD, periodic)
+	CALL clean_uscat(uscat_calc, TD, PD, periodic, nrows)
+	CALL clean_uscat(uscat_ref, TD, PD, periodic, nrows)
 	
 	error = nrm2((uscat_calc - uscat_ref))
 	
@@ -98,7 +101,7 @@ SUBROUTINE get_everyones_rows(nprocs, natoms, everyones_rows)
 			everyones_rows(p) = natoms/nprocs
 			rem = MOD(natoms,nprocs)
 		
-			IF (p.gt.(nrpocs-rem)) THEN
+			IF (p.gt.(nprocs-rem)) THEN
 					everyones_rows(p) = everyones_rows(p)+1
 			ENDIF
 		END DO
@@ -107,7 +110,7 @@ SUBROUTINE get_everyones_rows(nprocs, natoms, everyones_rows)
 		
 END SUBROUTINE
 
-SUBROUTINE clean_uscat(uscat, TD, PD, periodic)
+SUBROUTINE clean_uscat(uscat, TD, PD, periodic, nrows)
 
 !	This subroutine implies the following rules to the scattered wave
 !	For all p:
@@ -119,13 +122,14 @@ SUBROUTINE clean_uscat(uscat, TD, PD, periodic)
 !	END
 	
 	USE kinds
-	USE essentials
+	USE :: essentials, ONLY : sub2ind
 	IMPLICIT NONE
-	INCLUDE 'mpif.h' ! MPI header file
 	REAL							::	PD(3), TD(3)
 	INTEGER							::	n1, n2, n3, natc, na
+	INTEGER(KIND = IP)				::	nrows
 	logical							::	periodic
-	REAL(KIND = RP)					::	uscat
+	COMPLEX(KIND = CP)					::	uscat(nrows)
+	INTEGER(KIND = IP)				::	nSub(4), iSub(4), iG
 
 	nSub = (/natc, int(TD(1)), int(TD(2)), int(TD(3))/)
 
@@ -143,7 +147,7 @@ SUBROUTINE clean_uscat(uscat, TD, PD, periodic)
 							(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
 							(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
 							uscat(iG) = abs(uscat(iG))
-						ELSE (n3.lt.TD(3)/2) THEN
+						ELSE
 							uscat(iG) = 0.0_RP
 						ENDIF
 					ENDDO
@@ -177,13 +181,12 @@ END SUBROUTINE
 SUBROUTINE readfc ( flfrc, at )
 !-----------------------------------------------------------------------
   
-	USE mp_module
-	USE constants,  ONLY : amu_ry
-	USE essentials
+	USE :: constants,  ONLY : amu_ry
+	USE :: essentials, ONLY : cell_volume
+	USE kinds
 	!
 	IMPLICIT NONE
 	! I/O variable
-	INCLUDE 'mpif.h'
 	CHARACTER(LEN=256) :: flfrc
 	INTEGER :: ibrav, nr1,nr2,nr3,nat, ntyp
 	REAL(KIND = RP) :: alat, at(3,3), epsil(3,3)
@@ -209,129 +212,98 @@ SUBROUTINE readfc ( flfrc, at )
 	celldm(:) = 0.D0
 	!
 	!
-	IF (io_node) OPEN (unit=1,file=flfrc,status='old',form='formatted')
+	OPEN (unit=1,file=flfrc,status='old',form='formatted')
 	!
 	!  read cell data
 	!
-	IF (io_node)THEN
-	 READ(1,*) ntyp,nat,ibrav,(celldm(i),i=1,6)
-	 if (ibrav==0) then
+
+	READ(1,*) ntyp,nat,ibrav,(celldm(i),i=1,6)
+	if (ibrav==0) then
 		read(1,*) ((at(i,j),i=1,3),j=1,3)
-	 end if
-	ENDIF
-	CALL MPI_BCAST(ntyp, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(nat, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(ibrav, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(celldm, 6, mp_real, root_process, comm, ierr)
-	
-	IF (ibrav==0) THEN
-	 CALL MPI_BCAST(at, 9, mp_real, root_process, comm, ierr)
-	ENDIF
-	
+	end if
+
 	ALLOCATE(amass(ntyp))
-	
+
 	amass(:)=0.0_RP
 	!
 	CALL latgen(ibrav,celldm,at(1,1),at(1,2),at(1,3),omega)
 	alat = celldm(1)
 	at = at / alat !  bring at in units of alat
-	CALL MPI_BCAST(at, 9, mp_real, root_process, comm, ierr)
 	CALL cell_volume(at, alat, omega)
-	CALL MPI_BCAST(omega, 1, mp_real, root_process, comm, ierr)
 	!
 	!  read atomic types, positions and masses
 	!
 	DO nt = 1,ntyp
-	 IF (io_node) READ(1,*) i,atm,amass_from_file
-	
-	 CALL MPI_BCAST(i, 1, MPI_INT, root_process, comm, ierr)
-	 CALL MPI_BCAST(atm, ntyp, MPI_CHARACTER, root_process, comm, ierr)
-	 CALL MPI_BCAST(amass_from_file, 1, mp_real, root_process, comm, ierr)
-	 IF (i.NE.nt) THEN
-		write(*,*) ' ERROR'
-		write(*,*) ' Error reading mass from file '
-		write(*,*) ' ABORTING....'
-		STOP
-	 ENDIF
-	 IF (amass(nt).EQ.0.d0) THEN
-		amass(nt) = amass_from_file/amu_ry
-	 ELSE
-		WRITE(*,*) 'for atomic type',nt,' mass from file not used'
-	 END IF
+		READ(1,*) i,atm,amass_from_file
+
+		IF (i.NE.nt) THEN
+			write(*,*) ' ERROR'
+			write(*,*) ' Error reading mass from file '
+			write(*,*) ' ABORTING....'
+			STOP
+		ENDIF
+		IF (amass(nt).EQ.0.d0) THEN
+			amass(nt) = amass_from_file/amu_ry
+		ELSE
+			WRITE(*,*) 'for atomic type',nt,' mass from file not used'
+		END IF
 	END DO
-	
-	CALL MPI_BCAST(amass, ntyp, mp_real, root_process, comm, ierr)
+
 	!
 	ALLOCATE (tau(3,nat), ityp(nat), zeu(3,3,nat))
 	!
 	DO na=1,nat
-	 IF (io_node) READ(1,*) i,ityp(na),(tau(j,na),j=1,3)
-	 CALL MPI_BCAST(i, 1, MPI_INT, root_process, comm, ierr)
-	 IF (i.NE.na) THEN
-		write(*,*) ' ERROR'
-		write(*,*) ' Error reading ityp from file'
-		write(*,*) ' ABORTING....'
-		STOP
-	 ENDIF
+		READ(1,*) i,ityp(na),(tau(j,na),j=1,3)
+		IF (i.NE.na) THEN
+			write(*,*) ' ERROR'
+			write(*,*) ' Error reading ityp from file'
+			write(*,*) ' ABORTING....'
+			STOP
+		ENDIF
 	END DO
-	CALL MPI_BCAST(ityp, nat, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(tau, 3*nat, mp_real, root_process, comm, ierr)
 	!
 	!  read macroscopic variable
 	!
-	IF (io_node) READ (1,*) has_zstar
-	CALL MPI_BCAST(has_zstar, 1, mp_logical, root_process, comm, ierr)
+	READ (1,*) has_zstar
 	IF (has_zstar) THEN
-	 IF (io_node) READ(1,*) ((epsil(i,j),j=1,3),i=1,3)
-	 CALL MPI_BCAST(epsil, 9, mp_real, root_process, comm, ierr)
-	 IF (io_node) THEN
+		READ(1,*) ((epsil(i,j),j=1,3),i=1,3)
 		DO na=1,nat
-		   READ(1,*)
-		   READ(1,*) ((zeu(i,j,na),j=1,3),i=1,3)
+			READ(1,*)
+			READ(1,*) ((zeu(i,j,na),j=1,3),i=1,3)
 		END DO
-	 ENDIF
-	  CALL MPI_BCAST(zeu, 9, mp_real, root_process, comm, ierr)
 	ELSE
-	 zeu  (:,:,:) = 0.d0
-	 epsil(:,:) = 0.d0
+		zeu  (:,:,:) = 0.d0
+		epsil(:,:) = 0.d0
 	END IF
 	!
-	IF (io_node) READ (1,*) nr1,nr2,nr3
-	CALL MPI_BCAST(nr1, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(nr2, 1, MPI_INT, root_process, comm, ierr)
-	CALL MPI_BCAST(nr3, 1, MPI_INT, root_process, comm, ierr)
+	READ (1,*) nr1,nr2,nr3
+
 	!
 	!  read real-space interatomic force constants
 	!
 	ALLOCATE ( frc(nr1,nr2,nr3,3,3,nat,nat) )
 	frc(:,:,:,:,:,:,:) = 0.d0
 	DO i=1,3
-	 DO j=1,3
-		DO na=1,nat
-		   DO nb=1,nat
-			  IF (io_node) READ (1,*) ibid, jbid, nabid, nbbid
-			  CALL MPI_BCAST(ibid, 1, MPI_INT, root_process, comm, ierr)
-			  CALL MPI_BCAST(jbid, 1, MPI_INT, root_process, comm, ierr)
-			  CALL MPI_BCAST(nabid, 1, MPI_INT, root_process, comm, ierr)
-			  CALL MPI_BCAST(nbbid, 1, MPI_INT, root_process, comm, ierr)
-			  IF(i .NE.ibid  .OR. j .NE.jbid .OR.                   &
-				 na.NE.nabid .OR. nb.NE.nbbid) THEN
-				 write(*,*) ' ERROR'
-				 write(*,*) ' Error in reading force constants from frc file'
-				 write(*,*) ' ABORTING....'
-				 STOP
-			  ENDIF
-			  IF (io_node) READ (1,*) (((m1bid, m2bid, m3bid,        &
-						  frc(m1,m2,m3,i,j,na,nb),                  &
-						   m1=1,nr1),m2=1,nr2),m3=1,nr3)
-			   
-			  CALL MPI_BCAST(frc(:,:,:,i,j,na,nb), (nr1*nr2*nr3), mp_real, root_process, comm, ierr)
-		   END DO
+		DO j=1,3
+			DO na=1,nat
+				DO nb=1,nat
+					READ (1,*) ibid, jbid, nabid, nbbid
+					IF(i .NE.ibid  .OR. j .NE.jbid .OR.                   &
+						na.NE.nabid .OR. nb.NE.nbbid) THEN
+						write(*,*) ' ERROR'
+						write(*,*) ' Error in reading force constants from frc file'
+						write(*,*) ' ABORTING....'
+						STOP
+					ENDIF
+					READ (1,*) (((m1bid, m2bid, m3bid,        &
+									frc(m1,m2,m3,i,j,na,nb),                  &
+										m1=1,nr1),m2=1,nr2),m3=1,nr3)
+				END DO
+			END DO
 		END DO
-	 END DO
 	END DO
 	!
-	IF (io_node) CLOSE(unit=1)
+	CLOSE(unit=1)
 	!
 	RETURN
 END SUBROUTINE readfc
@@ -362,6 +334,7 @@ subroutine latgen(ibrav,celldm,a1,a2,a3,omega)
 !     NOTA BENE: all axis sets are right-handed
 !     Boxes for US PPs do not work properly with left-handed axis
 !
+	USE kinds
 	implicit none
 	integer, intent(in) :: ibrav
 	real(RP), intent(inout) :: celldm(6)
@@ -816,3 +789,46 @@ subroutine latgen(ibrav,celldm,a1,a2,a3,omega)
 	return
 !
 end subroutine latgen
+
+SUBROUTINE get_natsc(at, atc, nat, natsc, crystal_coordinates)
+		
+	USE essentials, ONLY : cell_volume
+	USE kinds
+	IMPLICIT NONE
+	
+	REAL(KIND = RP)		::	Vsc, V, at(3,3), atsc(3,3)
+	REAL				::	atc(3,3)
+	INTEGER				::	natsc, nsc, nat
+	INTEGER				::	i
+	LOGICAL				::	crystal_coordinates
+	
+	
+	IF (crystal_coordinates) THEN
+		atc = at 	! If working in crystal coordinates then supercell 
+						! is the primitive cell
+	ELSE
+		atc(:,:) = 0.D0
+		DO i = 1, 3
+			atc(i,i) = 1.0_RP
+		ENDDO
+	ENDIF
+	
+	atsc = atc
+	
+	CALL cell_volume(at, 1.D0, V)
+	
+	CALL cell_volume(atsc, 1.D0, Vsc)
+	
+			
+	IF ((Vsc/V-NINT(Vsc/V)).gt.1.0E-4) THEN
+		WRITE(*, *) 'ERROR : Volume of super cell ~= n * Volume of primitive lattice'
+		STOP
+	ENDIF
+	
+
+	
+	nsc = NINT(Vsc/V)
+	
+	natsc = nat*nsc
+	
+END SUBROUTINE get_natsc
