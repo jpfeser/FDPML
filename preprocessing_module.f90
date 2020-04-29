@@ -77,11 +77,13 @@ MODULE preprocessing_module
 		REAL(KIND = RP), ALLOCATABLE 			:: 	m_loc(:,:)
 		COMPLEX(KIND = CP)						::	z(3*nat(1), 3*nat(1))
 		
+		!get_qpoint: see next subroutine below; if qpoint has negative group velocity, it pick -q instead.
 		call get_qpoint(asr, na_ifc, fd, has_zstar, q, alat1, alat2, at1, at2, &
 							nat, ntyp, nr1, nr2, nr3, ibrav, mode, ityp1, ityp2, epsil, zeu1, &
 							zeu2, vg, omega1, omega2, frc1, frc2, w2, f_of_q1, f_of_q2, amass1, amass2, &
 							tau1, tau2)
-							
+		
+		!disp: in dispersion.f90 module					
 		call disp(	frc1, f_of_q1, tau1, zeu1, m_loc, nr1, nr2, nr3, epsil(:,:,1), nat(1), &
 					ibrav(1), alat1, at1, ntyp(1), ityp1, amass1, omega1, &
 					has_zstar(1), na_ifc, fd, asr, q, w2, z)
