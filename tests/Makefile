@@ -4,9 +4,15 @@
 
 DEBUG 		= Yes
 
-BIN_DIR		= $(shell pwd)/..
+MKDIR		= mkdir -p
 
-LINKERS		= -I ${BIN_DIR}
+PARENT_DIR	= $(shell pwd)/..
+
+SRC_DIR		= $(shell pwd)/src
+
+BIN_DIR		= $(shell pwd)/bin
+
+LINKERS		= -I ${PARENT_DIR}
 #
 # Fortran Compiler (FC) to be used:
 #
@@ -45,18 +51,18 @@ LIBS		= -lmkl_lapack95_ilp64 -lmkl_blas95_ilp64
 ####
 ##
 
-TARGET		= calculate_error.out
+TARGET		= $(BIN_DIR)/calculate_error.out
 
-MODULES		= ${BIN_DIR}/kinds.mod \
-			  ${BIN_DIR}/constants.mod \
-			  ${BIN_DIR}/essentials.mod
+MODULES		= ${PARENT_DIR}/kinds.mod \
+			  ${PARENT_DIR}/constants.mod \
+			  ${PARENT_DIR}/essentials.mod
 			 
-OBJECTS		= ${BIN_DIR}/kinds.o \
-			  ${BIN_DIR}/constants.o \
-			  ${BIN_DIR}/essentials.o \
-			  calculate_error.o
+OBJECTS		= ${PARENT_DIR}/kinds.o \
+			  ${PARENT_DIR}/constants.o \
+			  ${PARENT_DIR}/essentials.o \
+			  $(BIN_DIR)/calculate_error.o
 
-all : $(TARGET)
+all : $(BIN_DIR) $(TARGET)
 
 
 #
@@ -65,7 +71,14 @@ all : $(TARGET)
 #
 .PHONY: clean
 clean::
-		$(RM) -rf $(TARGET) calculate_error.o
+		$(RM) -rf $(TARGET) ${BIN_DIR}/calculate_error.o
+
+#
+# Rule to create directories if not present
+#
+
+$(BIN_DIR) :
+	$(MKDIR) $(BIN_DIR)
 
 #
 # Rule to produce the target executable:
@@ -81,7 +94,7 @@ endif
 #
 # Pattern rule that produces object code from source code:
 #
-%.o: %.f90
+${BIN_DIR}/%.o: ${SRC_DIR}/%.f90
 ifeq ($(DEBUG), Yes)
 	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_DEBUG) -o $@ -c $< $(LINKERS)
 else
@@ -92,7 +105,7 @@ endif
 # Pattern rule that produces a Fortran module from source
 # code:
 #
-%.mod: %.f90
+${BIN_DIR}/%.mod: ${SRC_DIR}/%.f90
 ifeq ($(DEBUG), Yes)
 	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_DEBUG) -c $< $(LINKERS)
 else
