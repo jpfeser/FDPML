@@ -12,3 +12,4 @@ uscat_plot
 K_plot
 sig_plot
 .nfs*
+tests/calculate_error.out
