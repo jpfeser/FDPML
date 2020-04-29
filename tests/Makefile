@@ -6,13 +6,13 @@ DEBUG 		= Yes
 
 MKDIR		= mkdir -p
 
-PARENT_DIR	= $(shell pwd)/..
+PARENT_BIN	= $(shell pwd)/../bin
 
 SRC_DIR		= $(shell pwd)/src
 
 BIN_DIR		= $(shell pwd)/bin
 
-LINKERS		= -I ${PARENT_DIR}
+LINKERS		= -I ${PARENT_BIN}
 #
 # Fortran Compiler (FC) to be used:
 #
@@ -53,13 +53,13 @@ LIBS		= -lmkl_lapack95_ilp64 -lmkl_blas95_ilp64
 
 TARGET		= $(BIN_DIR)/calculate_error.out
 
-MODULES		= ${PARENT_DIR}/kinds.mod \
-			  ${PARENT_DIR}/constants.mod \
-			  ${PARENT_DIR}/essentials.mod
+MODULES		= ${PARENT_BIN}/kinds.mod \
+			  ${PARENT_BIN}/constants.mod \
+			  ${PARENT_BIN}/essentials.mod
 			 
-OBJECTS		= ${PARENT_DIR}/kinds.o \
-			  ${PARENT_DIR}/constants.o \
-			  ${PARENT_DIR}/essentials.o \
+OBJECTS		= ${PARENT_BIN}/kinds.o \
+			  ${PARENT_BIN}/constants.o \
+			  ${PARENT_BIN}/essentials.o \
 			  $(BIN_DIR)/calculate_error.o
 
 all : $(BIN_DIR) $(TARGET)
