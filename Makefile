@@ -112,7 +112,8 @@ default: $(TARGET)
 #
 # Run "make all" command to generate target file
 #
-all : $(TARGET)
+all : 	$(TARGET)
+		+$(MAKE) -C tests
 
 #
 # The "clean" target just removes all files (modules, object code)
@@ -120,7 +121,7 @@ all : $(TARGET)
 #
 .PHONY: clean
 clean::
-	$(RM) -rf $(TARGET) $(MODULES) $(OBJECTS)
+		$(RM) -rf $(TARGET) $(MODULES) $(OBJECTS)
 
 #
 # Rule to produce the target executable:
