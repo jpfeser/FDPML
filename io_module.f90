@@ -90,7 +90,7 @@ MODULE io_module
 			STOP
 		 ENDIF
 		 IF (amass(nt).EQ.0.d0) THEN
-			amass(nt) = amass_from_file/amu_ry
+			amass(nt) = amass_from_file/amu_ry !note: mass in units of amu
 		 ELSE
 			WRITE(*,*) 'for atomic type',nt,' mass from file not used'
 		 END IF

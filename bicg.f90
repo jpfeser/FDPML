@@ -68,7 +68,6 @@ MODULE bicg
 													 recvcounts, recvdispls
 		!------------------------------
 		! Matrix/vector distribution variables
-		INTEGER(KIND=IP) :: ierr
 		INTEGER(KIND=IP) :: my_nnz, my_nrows, nrows
 		INTEGER(KIND=IP) :: counter, ws, i1 ! counters
 		INTEGER(KIND=IP), DIMENSION(my_nnz) :: my_colInd, my_RowInd
@@ -490,7 +489,6 @@ MODULE bicg
 													 recvcounts, recvdispls
 		!------------------------------
 		! Matrix/vector distribution variables
-		INTEGER(KIND=IP) :: ierr
 		INTEGER(KIND=IP) :: my_nnz, my_nrows, nrows
 		INTEGER(KIND=IP) :: counter, ws, i1 ! counters
 		INTEGER(KIND=IP), DIMENSION(my_nnz) :: my_colInd, my_RowInd
