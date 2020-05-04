@@ -1,0 +1,11 @@
+&filenames
+	flfrc='test_1/Si_q2.fc'
+	tmp_dir='scratch/'
+	ref_filename='test_1/uscat.save'
+/
+&system
+	PD(1) = 11, 11, 20
+	LPML = 20
+	periodic = .true.
+	crystal_coordinates = .false.
+/

@@ -77,7 +77,7 @@ PMLL=20
 #
 # The MPI program to execute:
 #
-MY_EXE="FDPML.out"
+MY_EXE="bin/FDPML.out"
 
 TMP_DIR='/lustre/scratch/rohitk/FDPML_tmp'
 DOMAIN="${TMP_DIR}/Domain.dat"
