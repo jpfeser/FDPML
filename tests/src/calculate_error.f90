@@ -25,21 +25,38 @@ PROGRAM calculate_error
 	INTEGER(KIND = IP), ALLOCATABLE			::	everyones_rows(:)
 	COMPLEX(KIND = CP), ALLOCATABLE			::	uscat_calc(:), uscat_ref(:)
 	REAL(KIND = RP)							::	error, tol
-	INTEGER									::	p, LPML
+	INTEGER									::	p, LPML, nq
 	
 	tol = 1e-6
+	
+!	Load input parameters
 	
 	NAMELIST /filenames/ flfrc, tmp_dir, ref_filename &
 			 /system/ PD, LPML, periodic, crystal_coordinates &
 			 /simulation/ nprocs
-	
-	ALLOCATE(everyones_rows(nprocs))
 			 
-	CALL readfc( flfrc, at )
+	READ(stdin, filenames)
+	READ(stdin, system)
+	READ(stdin, simulation)
+		
+	ALLOCATE(everyones_rows(nprocs))
+	
+!	Read the IFC file to figure out natsc
+
+	CALL readfc( flfrc, at, nat)
 			 
 	CALL get_natsc(at, atc, nat, natc, crystal_coordinates)
 	
-	natoms = int(TD(1)*TD(2)*TD(3)*natc)
+!	Calculate memory requirements to store reference and calculated solutions	
+
+	IF (periodic) THEN
+		TD = PD + (/ 0, 0, 2*LPML/)
+	ELSE
+		TD = PD + (/ 2*LPML, 2*LPML, 2*LPML/)
+	ENDIF
+	
+	
+	natoms = TD(1)*TD(2)*TD(3)*natc
 	nrows = 3*natoms
 	ALLOCATE(uscat_calc(nrows), uscat_ref(nrows))
 	
@@ -47,12 +64,8 @@ PROGRAM calculate_error
 	
 	CALL get_everyones_rows(nprocs, natoms, everyones_rows)
 	
-	IF (periodic) THEN
-		TD = PD + (/ 0, 0, 2*LPML/)
-	ELSE
-		TD = PD + (/ 2*LPML, 2*LPML, 2*LPML/)
-	ENDIF
-	
+!	Load solutions into their respective variables
+		
 	nrowsm1 = 1
 	DO p = 0, nprocs-1
 		IF (p .lt. 10) then
@@ -62,29 +75,35 @@ PROGRAM calculate_error
 		ELSE 
 			format_string = "(a, a, a, I3, a)"
 		ENDIF
-		nrows = everyones_rows(p+1)
+		nrows = nrowsm1 + everyones_rows(p+1) - 1
 		WRITE(filename, format_string) trim(tmp_dir), '/', 'uscat_', p, '.save'
 		open (unit  = 639, file = filename, form = 'unformatted')
 		read (unit = 639) uscat_calc(nrowsm1:nrows)
 		close(unit = 639)
 		nrowsm1 = nrows+1
 	END DO
-	
+
 	open (unit  = 639, file = ref_filename, form = 'unformatted')
 	read (unit = 639) uscat_ref
-	close(unit = 639)
+	close(unit = 639)	
 	
+!	Clean the solutions -
+!		Since I want to just compare the solutions inside the primary domain,
+!		the value to scattered waves inside PML-domain is set to 0, and the value
+!		of scattered wave inside the Primary domain is uscat = abs(uscat)
+!		Such a comparison makes the scattered wave phase independent
+
 	CALL clean_uscat(uscat_calc, TD, PD, periodic, nrows)
 	CALL clean_uscat(uscat_ref, TD, PD, periodic, nrows)
 	
 	error = nrm2((uscat_calc - uscat_ref))
-	
+			
 	IF (error.le.tol) THEN
-		STOP 0
+		CALL EXIT(0)
 	ELSE
-		STOP 1
-	END IF
-	
+		CALL EXIT(1)
+	ENDIF
+		
 END PROGRAM calculate_error
 
 SUBROUTINE get_everyones_rows(nprocs, natoms, everyones_rows)
@@ -178,7 +197,7 @@ SUBROUTINE clean_uscat(uscat, TD, PD, periodic, nrows)
 END SUBROUTINE
 
 !-----------------------------------------------------------------------
-SUBROUTINE readfc ( flfrc, at )
+SUBROUTINE readfc ( flfrc, at, nat )
 !-----------------------------------------------------------------------
   
 	USE :: constants,  ONLY : amu_ry
@@ -212,14 +231,15 @@ SUBROUTINE readfc ( flfrc, at )
 	celldm(:) = 0.D0
 	!
 	!
-	OPEN (unit=1,file=flfrc,status='old',form='formatted')
+	
+	OPEN (unit=639,file=flfrc,status='old',form='formatted')
 	!
 	!  read cell data
 	!
 
-	READ(1,*) ntyp,nat,ibrav,(celldm(i),i=1,6)
+	READ(639,*) ntyp,nat,ibrav,(celldm(i),i=1,6)
 	if (ibrav==0) then
-		read(1,*) ((at(i,j),i=1,3),j=1,3)
+		read(639,*) ((at(i,j),i=1,3),j=1,3)
 	end if
 
 	ALLOCATE(amass(ntyp))
@@ -234,7 +254,7 @@ SUBROUTINE readfc ( flfrc, at )
 	!  read atomic types, positions and masses
 	!
 	DO nt = 1,ntyp
-		READ(1,*) i,atm,amass_from_file
+		READ(639,*) i,atm,amass_from_file
 
 		IF (i.NE.nt) THEN
 			write(*,*) ' ERROR'
@@ -253,7 +273,7 @@ SUBROUTINE readfc ( flfrc, at )
 	ALLOCATE (tau(3,nat), ityp(nat), zeu(3,3,nat))
 	!
 	DO na=1,nat
-		READ(1,*) i,ityp(na),(tau(j,na),j=1,3)
+		READ(639,*) i,ityp(na),(tau(j,na),j=1,3)
 		IF (i.NE.na) THEN
 			write(*,*) ' ERROR'
 			write(*,*) ' Error reading ityp from file'
@@ -264,19 +284,19 @@ SUBROUTINE readfc ( flfrc, at )
 	!
 	!  read macroscopic variable
 	!
-	READ (1,*) has_zstar
+	READ (639,*) has_zstar
 	IF (has_zstar) THEN
-		READ(1,*) ((epsil(i,j),j=1,3),i=1,3)
+		READ(639,*) ((epsil(i,j),j=1,3),i=1,3)
 		DO na=1,nat
-			READ(1,*)
-			READ(1,*) ((zeu(i,j,na),j=1,3),i=1,3)
+			READ(639,*)
+			READ(639,*) ((zeu(i,j,na),j=1,3),i=1,3)
 		END DO
 	ELSE
 		zeu  (:,:,:) = 0.d0
 		epsil(:,:) = 0.d0
 	END IF
 	!
-	READ (1,*) nr1,nr2,nr3
+	READ (639,*) nr1,nr2,nr3
 
 	!
 	!  read real-space interatomic force constants
@@ -287,7 +307,7 @@ SUBROUTINE readfc ( flfrc, at )
 		DO j=1,3
 			DO na=1,nat
 				DO nb=1,nat
-					READ (1,*) ibid, jbid, nabid, nbbid
+					READ (639,*) ibid, jbid, nabid, nbbid
 					IF(i .NE.ibid  .OR. j .NE.jbid .OR.                   &
 						na.NE.nabid .OR. nb.NE.nbbid) THEN
 						write(*,*) ' ERROR'
@@ -295,7 +315,7 @@ SUBROUTINE readfc ( flfrc, at )
 						write(*,*) ' ABORTING....'
 						STOP
 					ENDIF
-					READ (1,*) (((m1bid, m2bid, m3bid,        &
+					READ (639,*) (((m1bid, m2bid, m3bid,        &
 									frc(m1,m2,m3,i,j,na,nb),                  &
 										m1=1,nr1),m2=1,nr2),m3=1,nr3)
 				END DO
@@ -303,7 +323,7 @@ SUBROUTINE readfc ( flfrc, at )
 		END DO
 	END DO
 	!
-	CLOSE(unit=1)
+	CLOSE(unit=639)
 	!
 	RETURN
 END SUBROUTINE readfc
@@ -813,7 +833,7 @@ SUBROUTINE get_natsc(at, atc, nat, natsc, crystal_coordinates)
 		ENDDO
 	ENDIF
 	
-	atsc = atc
+	atsc = atc	
 	
 	CALL cell_volume(at, 1.D0, V)
 	
@@ -824,8 +844,6 @@ SUBROUTINE get_natsc(at, atc, nat, natsc, crystal_coordinates)
 		WRITE(*, *) 'ERROR : Volume of super cell ~= n * Volume of primitive lattice'
 		STOP
 	ENDIF
-	
-
 	
 	nsc = NINT(Vsc/V)
 	

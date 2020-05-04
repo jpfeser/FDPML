@@ -1,0 +1,19 @@
+## Test #1
+
+Interfacial domain for homogeneous systems. Input is a half-wave for an Si-Si interface.
+
+cross-section for primary domain
+
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+ 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 2
+
+* Expected Transmission Coefficient = 1.0000 *
