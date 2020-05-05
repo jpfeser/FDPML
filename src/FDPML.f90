@@ -67,7 +67,7 @@ PROGRAM FDPML
 	use, intrinsic :: iso_fortran_env, only : stdin=>input_unit, &
 											  stdout=>output_unit, &
 											  stderr=>error_unit
-	USE constants, ONLY : tpi, amu_ry, RY_TO_CMM1, RY_TO_THZ, BOHR_RADIUS_SI
+	USE constants, ONLY : tpi, amu_ry, RY_TO_CMM1, RY_TO_THZ, BOHR_RADIUS_SI, GB_byte
 											  
 	IMPLICIT NONE
 	INCLUDE 'mpif.h' ! MPI header file
@@ -200,12 +200,13 @@ PROGRAM FDPML
 !										my_postprocessing_time
 	INTEGER(KIND = IP)				:: 	my_BW
 	INTEGER							:: 	final_iter
-	LOGICAL							::	scattering_Xsec
+	LOGICAL							::	scattering_Xsec, expense_estimate
 	CHARACTER(len = 256) 			::	q_file
 	LOGICAL							::	q_from_file
 	REAL(KIND = RP), ALLOCATABLE	::	w2list(:,:), qlist_from_file(:,:)
 	COMPLEX(KIND = CP), ALLOCATABLE	::	zclist(:,:)
 	REAL(KIND =RP)					::	Xsec, Jinc, V
+	REAL(KIND = RP)					::	memory_A, my_memory_A
 	
 	CALL mp_init( )
 	
@@ -220,7 +221,7 @@ PROGRAM FDPML
 
 	NAMELIST /filenames/ mass_file, domain_file, flfrc1, flfrc2, mass_input &
 			 /system/ simulation_type, PD, LPML, periodic, crystal_coordinates, &
-					  asr, wavetype, q, mode, sigmamax &
+					  asr, wavetype, q, mode, sigmamax, expense_estimate &
 			 /qlists/ q_from_file, q_file &
 			 /solver/ tol, maxit &
 			 /restartoptions/ restart, iterpause, tmp_dir, &
@@ -232,8 +233,8 @@ PROGRAM FDPML
 	Call set_defaults(mass_input, crystal_coordinates, asr, qpoint, &
 						file_input, qlist_file, slist_file, Llist_file, &
 						Lpoint, spoint, tol, maxit, restart, iterpause, calc_TC, &
-						scattered_energy, scattering_Xsec, plot_K, plot_sig, plot_uinc, plot_uscat, q_from_file, &
-						q_file)
+						scattered_energy, scattering_Xsec, plot_K, plot_sig, plot_uinc, &
+						plot_uscat, q_from_file, q_file, expense_estimate)
 	
 	IF (root_node) THEN
 		READ(stdin, filenames)
@@ -277,6 +278,7 @@ PROGRAM FDPML
 	CALL MPI_BCAST(iterpause, 1, MPI_INT, root_process, comm, ierr)
 	CALL MPI_BCAST(tmp_dir, 256, MPI_CHAR, root_process, comm, ierr)
 	CALL MPI_BCAST(scattering_Xsec, 1, mp_logical, root_process, comm, ierr)
+	CALL MPI_BCAST(expense_estimate, 1, mp_logical, root_process, comm, ierr)
 	
 	
 	IF (my_id .lt. 10) then
@@ -415,6 +417,7 @@ PROGRAM FDPML
 	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
 	ALLOCATE(zclist(3*natc, nq))
 	
+	
 	DO qpoint = 1, nq
 		q(:) = qlist(:,qpoint)
 		! get_disp: see preprocessing_module.f90
@@ -429,6 +432,8 @@ PROGRAM FDPML
 	!	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
 	!	where n is an integer
 	
+
+	
 		call get_supercell(at1, tau1, ityp1, nat, z(:,mode), r_cell, na_vec, ib_vec1, &
 									ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
 									nr1, nr2, nr3)
@@ -436,6 +441,8 @@ PROGRAM FDPML
 		zclist(:,qpoint) = zc(:)
 	
 	ENDDO
+	
+
 	
 	sigmamax = sigmamax*sqrt(w2(mode))/(LPML*(q(3)))
 
@@ -481,12 +488,6 @@ PROGRAM FDPML
 						TD, PD, atoms_start, ityp_TD, tauc, natc)
 
 !	=======================================================================================
-
-!	Set up A-matrix
-
-	IF (io_node) write (stdout, *) '	'
-	IF (io_node) write (stdout, *) '-----------------------------------------------------------------------'
-	IF (io_node) write (stdout, *) 'Setting up A matrix'
 
 
 !	----------------------------------------------------------------------------------------
@@ -693,11 +694,40 @@ PROGRAM FDPML
 !	----------------------------------------------------------------------------------------
 
 	my_nnz = counter1+my_nrows
+	
+	
+!	memory = memory(ilist) + memory(jlist) + memory(Alist) + memory(uinc) + memory(uscat)
+	my_memory_A = (IP*my_nnz + RP*my_nnz + 2*CP*my_nnz + 2*CP*my_nrows + 2*CP*my_nrows)/GB_byte
+	
+	CALL MPI_REDUCE(my_memory_A, memory_A, 1, mp_real, mp_sumr, root_process, &
+					comm, ierr)
+	
+	if (io_node) WRITE (stdout, '(a, E10.3, a)') 'Total memory requirements for FDPML = ', memory_A, ' GB'	
+	
+	IF (expense_estimate) THEN
+		CALL mp_finalize( )
+		if (io_node) WRITE (stdout, '(a)') 'Ending memory calculation run'
+		STOP
+	ENDIF
+	
+!	Set up A-matrix
+
+	IF (io_node) write (stdout, *) '	'
+	IF (io_node) write (stdout, *) '-----------------------------------------------------------------------'
+	IF (io_node) write (stdout, *) 'Setting up A matrix'
+
+
+	
 	ALLOCATE(	ilist(counter1+my_nrows), jlist(counter1+my_nrows), &
-				Alist(counter1+my_nrows)	) ! my_nrows accounts for -m*w**2 
+				Alist(counter1+my_nrows), stat = ierr	) ! my_nrows accounts for -m*w**2 
 											  ! subtraction from every row of A-mat
 											  ! Amat = -(m*w**2+K) equn A3 on 
 											  !	PHYSICAL REVIEW B 95, 125434 (2017)
+
+	IF (ierr.ne.0) THEN
+		WRITE (stdout, '(a)') 'ERROR ALLOCATING MEMORY'
+		WRITE (stdout, '(a, E10.3, a)') 'Total memory requirements for FDPML = ', memory_A, ' GB'
+	ENDIF 
 
 	WRITE (stdout, '(a, I)') 'nnz = ', counter1+my_nrows
 
@@ -1421,13 +1451,11 @@ SUBROUTINE Group_velocity(frc, f_of_q, tau, zeu, m_loc, nr1, nr2, nr3, epsil, na
 					omega, has_zstar, na_ifc, fd, asr, qplus, w2, z)
 					
 	wplus = sqrt(w2(mode))
-	print *, wplus
 					
 	CALL disp(frc, f_of_q, tau, zeu, m_loc, nr1, nr2, nr3, epsil, nat, ibrav, alat, at, ntyp, ityp, amass, & 
 					omega, has_zstar, na_ifc, fd, asr, qminus, w2, z)
 	
 	wminus = sqrt(w2(mode))
-	print *, wminus
 	
 	vg(3) = (wplus-wminus)/(2*dq*2*pi)
 

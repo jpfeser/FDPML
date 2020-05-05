@@ -117,5 +117,8 @@ MODULE constants
   REAL(RP), PARAMETER :: RY_TO_GHZ = RY_TO_THZ*1000.0_RP
   REAL(RP), PARAMETER :: RY_TO_CMM1 = 1.E+10_RP * RY_TO_THZ / C_SI
   !
+  
+  !!!!! MEMORY Conversions
+  REAL(RP), PARAMETER :: GB_byte = 1024*1024*1024
 
 END MODULE constants
