@@ -1,0 +1,52 @@
+  &filenames
+	domain_file = '/lustre/scratch/rohitk/FDPML_tmp/Domain.dat',
+	mass_file = '/lustre/scratch/rohitk/FDPML_tmp/mass.dat', 
+	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
+	mass_input = .false.
+/
+  &system
+	simulation_type = 'interface'
+	PD(1) = 11, 11, 20
+	LPML = 20
+	periodic = .true.
+	crystal_coordinates = .false.
+	asr = 'simple'
+	wavetype = 'half'
+	q(1) = 0.0, 0.0, 0.1
+	mode = 3
+	sigmamax = 3
+/
+  &qlists
+	q_from_file = .false.
+	q_file = 'q_file.csv'
+/
+  &solver
+	tol = 3.5e-8
+	maxit = 1000000
+/
+  &restartoptions
+	tmp_dir='scratch/'
+	restart=.false.
+/
+  &postprocessing
+	calc_TC = .true.
+	scattered_energy= .true.
+	scattering_Xsec = .true.
+/
+  &plots
+	plot_K = .false.
+	plot_sig = .false.
+	plot_uinc = .false.
+	plot_uscat = .false.
+	plottingmode = 3
+/
+  &calibrate
+	file_input = .false.
+	qlist_file = 'qlist.csv'
+	Llist_file = 'Llist.csv'
+	slist_file = 'slist.csv'
+	Lpoint=1
+	spoint=1
+	qpoint=1
+/

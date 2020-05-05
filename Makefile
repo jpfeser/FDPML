@@ -4,27 +4,33 @@
 
 DEBUG 		= Yes
 
+MKDIR		= mkdir -p
+
+SRC_DIR		= $(shell pwd)/src
+
+BIN_DIR		= $(shell pwd)/bin
+
 #
 # List of Fortran modules that should be generated from source files
 # (with .f90 suffix) in this directory
 #
-MODULES		= kinds.mod \
-			init.mod \
-			constants.mod \
-			mp_module.mod \
-			essentials.mod \
-			io_module.mod \
-			rigid.mod \
-			ws.mod \
-			sum_rule.mod \
-			matrix_inversion.mod \
-			monkhorstpack.mod \
-			dispersion.mod \
-			gnufor2.mod \
-			COO_routines.mod \
-			preprocessing_module.mod \
-			matgen_module.mod \
-			bicg.mod 
+MODULES		= ${BIN_DIR}/kinds.mod \
+			${BIN_DIR}/init.mod \
+			${BIN_DIR}/constants.mod \
+			${BIN_DIR}/mp_module.mod \
+			${BIN_DIR}/essentials.mod \
+			${BIN_DIR}/io_module.mod \
+			${BIN_DIR}/rigid.mod \
+			${BIN_DIR}/ws.mod \
+			${BIN_DIR}/sum_rule.mod \
+			${BIN_DIR}/matrix_inversion.mod \
+			${BIN_DIR}/monkhorstpack.mod \
+			${BIN_DIR}/dispersion.mod \
+			${BIN_DIR}/gnufor2.mod \
+			${BIN_DIR}/COO_routines.mod \
+			${BIN_DIR}/preprocessing_module.mod \
+			${BIN_DIR}/matgen_module.mod \
+			${BIN_DIR}/bicg.mod 
 
 
 #
@@ -36,29 +42,29 @@ SOURCES		= FDPML.f90
 # Generate list of object files for the SOURCES listed
 # above:
 #
-OBJECTS		= kinds.o \
-			init.o \
-			constants.o \
-			mp_module.o \
-			essentials.o \
-			io_module.o \
-			rigid.o \
-			ws.o \
-			sum_rule.o \
-			matrix_inversion.o \
-			monkhorstpack.o \
-			dispersion.o \
-			gnufor2.o \
-			COO_routines.o \
-			preprocessing_module.o \
-			matgen_module.o \
-			bicg.o \
-			FDPML.o
+OBJECTS		= ${BIN_DIR}/kinds.o \
+			${BIN_DIR}/init.o \
+			${BIN_DIR}/constants.o \
+			${BIN_DIR}/mp_module.o \
+			${BIN_DIR}/essentials.o \
+			${BIN_DIR}/io_module.o \
+			${BIN_DIR}/rigid.o \
+			${BIN_DIR}/ws.o \
+			${BIN_DIR}/sum_rule.o \
+			${BIN_DIR}/matrix_inversion.o \
+			${BIN_DIR}/monkhorstpack.o \
+			${BIN_DIR}/dispersion.o \
+			${BIN_DIR}/gnufor2.o \
+			${BIN_DIR}/COO_routines.o \
+			${BIN_DIR}/preprocessing_module.o \
+			${BIN_DIR}/matgen_module.o \
+			${BIN_DIR}/bicg.o \
+			${BIN_DIR}/FDPML.o
 
 #
 # What should the executable produced be named?
 #
-TARGET		= FDPML.out
+TARGET		= ${BIN_DIR}/FDPML.out
 
 ##
 ####
@@ -112,7 +118,8 @@ default: $(TARGET)
 #
 # Run "make all" command to generate target file
 #
-all : $(TARGET)
+all : 	$(BIN_DIR) $(TARGET)
+		+$(MAKE) -C tests
 
 #
 # The "clean" target just removes all files (modules, object code)
@@ -120,12 +127,21 @@ all : $(TARGET)
 #
 .PHONY: clean
 clean::
-	$(RM) -rf $(TARGET) $(MODULES) $(OBJECTS)
+		$(RM) -rf $(TARGET) $(MODULES) $(OBJECTS)
+		+$(MAKE) -C tests clean
+		
+#
+# Rule to create directories if not present
+#
+
+$(BIN_DIR) :
+	$(MKDIR) $(BIN_DIR)
+
 
 #
 # Rule to produce the target executable:
 #
-$(TARGET): $(MODULES) $(OBJECTS)
+$(TARGET): $(OBJECTS)
 ifeq ($(DEBUG), Yes)
 	$(FC) $(FFLAGS_FOR_DEBUG) -o $@ $(OBJECTS) $(LDFLAGS) $(LIBS)
 else
@@ -134,22 +150,22 @@ endif
 #
 # Pattern rule that produces object code from source code:
 #
-%.o: %.f90
+${BIN_DIR}/%.o: ${SRC_DIR}/%.f90
 ifeq ($(DEBUG), Yes)
-	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_DEBUG) -o $@ -c $<
+	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_DEBUG) -module $(BIN_DIR) -c -o $@ $<
 else
-	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_RUN) -o $@ -c $<
+	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_RUN) -module $(BIN_DIR) -c -o $@ -c $<
 endif
 
 #
 # Pattern rule that produces a Fortran module from source
 # code:
 #
-%.mod: %.f90
-ifeq ($(DEBUG), Yes)
-	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_DEBUG) -c $< 
-else
-	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_RUN) -c $< 
-endif
+#${BIN_DIR}/%.mod: ${SRC_DIR}/%.f90
+#ifeq ($(DEBUG), Yes)
+#	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_DEBUG) -c -module $(BIN_DIR) -o $< 
+#else
+#	$(FC) $(FPPFLAGS) $(FFLAGS_FOR_RUN) -c -module $(BIN_DIR) -o $< 
+#endif
 
 

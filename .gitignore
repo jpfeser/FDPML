@@ -6,9 +6,13 @@ results_*
 timing_*
 test_input.*
 FDPML.out
-*.txt
+data_file.txt
+command_file.txt
 uinc_plot
 uscat_plot
 K_plot
 sig_plot
 .nfs*
+tests/bin/calculate_error.out
+tests/mpi_submit.sh.o*
+tests/submit.sh.o*
