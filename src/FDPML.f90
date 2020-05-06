@@ -345,6 +345,7 @@ PROGRAM FDPML
 			ENDDO
 		ENDIF
 	ENDIF	
+	
 !!	----------------------------------------------------------------------------------------
 	
 	CALL MPI_BCAST(LPML, 1, MPI_INT, root_process, comm, ierr)
@@ -696,8 +697,12 @@ PROGRAM FDPML
 	my_nnz = counter1+my_nrows
 	
 	
-!	memory = memory(ilist) + memory(jlist) + memory(Alist) + memory(uinc) + memory(uscat)
-	my_memory_A = (IP*my_nnz + RP*my_nnz + 2*CP*my_nnz + 2*CP*my_nrows + 2*CP*my_nrows)/GB_byte
+!	memory = memory(ilist) + memory(jlist) + memory(Alist) + memory(uinc) + memory(uscat) +&
+!			memory(ityp_PD) + memory(ityp_PD) + memory(amass_PD) + memory(amass_TD) + memory(sig) + &
+!			memory(my_K) + memory(borderlogic)
+	my_memory_A = (IP*my_nnz + RP*my_nnz + 2*CP*my_nnz + 2*CP*my_nrows + 2*CP*my_nrows + &
+					sizeof(ityp_PD) + sizeof(ityp_TD) + sizeof(amass_PD) + sizeof(amass_TD) + &
+					RP*my_nrows + 2*CP*my_nrows + 2.0_RP/8.0_RP*counter2)/GB_byte
 	
 	CALL MPI_REDUCE(my_memory_A, memory_A, 1, mp_real, mp_sumr, root_process, &
 					comm, ierr)
