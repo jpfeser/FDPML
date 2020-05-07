@@ -16,3 +16,6 @@ sig_plot
 tests/bin/calculate_error.out
 tests/mpi_submit.sh.o*
 tests/submit.sh.o*
+slurm-*
+incard.*
+outcard.*
