@@ -721,6 +721,8 @@ PROGRAM FDPML
 	CALL print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, mem_ityp_TD, &
 								mem_amass_TD, mem_amass_PD)
 
+	CALL MPI_BARRIER(comm, ierr)
+	
 	
 	IF (expense_estimate) THEN
 		CALL mp_finalize( )
@@ -746,7 +748,6 @@ PROGRAM FDPML
 		WRITE (stdout, '(a)') 'ERROR ALLOCATING MEMORY'
 	ENDIF 
 
-	WRITE (stdout, '(a, I)') 'nnz = ', counter1+my_nrows
 
 	ALLOCATE(borderlogic(counter2))		  ! Defines every atom connected outside
 											  ! TD
@@ -1542,20 +1543,21 @@ SUBROUTINE print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, me
 	USE constants, ONLY : GB_byte
 	USE mp_module
 	IMPLICIT NONE
-	INTEGER(KIND = IP) 		:: 	my_nnz, my_nrows, counter2, nrows, nnz
+	INCLUDE 'mpif.h'
+	INTEGER(KIND = IP) 		:: 	my_nnz, my_nrows, counter2, nrows
 	INTEGER					::	mem_ityp_TD, mem_ityp_PD, mem_amass_TD, mem_amass_PD
-	REAL					::	my_memory_A, memory_A
+	REAL					::	my_memory_A, memory_A, nnz
 	
 	my_memory_A = (IP*my_nnz + RP*my_nnz + 2*CP*my_nnz + 2*CP*my_nrows + 2*CP*my_nrows + &
 					mem_ityp_PD + mem_ityp_TD + mem_amass_PD + mem_amass_TD + &
 					RP*my_nrows + 2*CP*my_nrows + 2.0_RP/8.0_RP*counter2)/GB_byte
 					
-	CALL MPI_REDUCE(my_nnz, nnz, 1, mp_int, mp_sumi, root_process, comm, ierr)
-	
+	CALL MPI_REDUCE(real(my_nnz), nnz, 1, MPI_REAL, MPI_SUM, root_process, comm, ierr)
+		
 !	==============MEMORY USAGE OF CRITICAL VARIABLES===========================
 	IF (io_node) THEN
 		WRITE(stdout, '(a)')	'============ MEMORY USAGE ==============='
-		WRITE(stdout, '(a25, E10.3, a3)') 'A-Matrix                         ', real(IP*nnz + RP*nnz + 2*CP*nnz)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'A-Matrix                         ', (IP*nnz + RP*nnz + 2*CP*nnz)/(GB_Byte), ' GB'
 		WRITE(stdout, '(a25, E10.3, a3)') 'Incident Wave                    ', real(2*CP*nrows)/real(GB_Byte), ' GB'
 		WRITE(stdout, '(a25, E10.3, a3)') 'Scattered Wave                   ', real(2*CP*nrows)/real(GB_Byte), ' GB'
 		WRITE(stdout, '(a25, E10.3, a3)') 'K-vector                         ', real(2*CP*nrows)/real(GB_Byte), ' GB'
@@ -1568,7 +1570,7 @@ SUBROUTINE print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, me
 		WRITE(stdout, '(a40)') '--------------------------------------------------------'
 	END IF
 	
-	CALL MPI_REDUCE(my_memory_A, memory_A, 1, mp_real, mp_sumr, root_process, &
+	CALL MPI_REDUCE(my_memory_A, memory_A, 1, MPI_REAL, MPI_SUM, root_process, &
 					comm, ierr)
 	
 	if (io_node) WRITE (stdout, '(a25, E10.3, a3)') 'Total memory =           ', memory_A, ' GB'	
