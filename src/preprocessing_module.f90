@@ -247,9 +247,7 @@ MODULE preprocessing_module
 		
 		
 		CALL MPI_BCAST(ityp_PD, size(ityp_PD), MPI_INT, root_process, comm, ierr)
-		
-		print *, mass_input
-	
+			
 		IF (mass_input) THEN
 			IF (io_node) THEN
 				open (unit  = 1, file = mass_file, form = 'unformatted')
@@ -270,7 +268,6 @@ MODULE preprocessing_module
 		ALLOCATE(ityp_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
 		ALLOCATE(amass_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
 	
-		print *, int(TD(1)), int(TD(2)), int(TD(3)), natc
 	
 		IF (periodic) THEN
 			DO n1 = 1, TD(1)

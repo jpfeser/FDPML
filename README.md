@@ -71,6 +71,7 @@ Input cards:
 	* **q** = *wavevector, ignored if mp = .true.*
 	* **mode** = *polarization (integer, from lowest to highest frequency)*
 	* **sigmamax** = *maximum non-dimensional damping coefficient (same sig*(k*LPML)/omega)*
+	* **expense_estimate** = *if .true. this run only calculates the memory requirements for the set of input parameters*
 3. qlists
 	* **q_from_file**: *logical, if .true. then simulated multiple incident q points at one time*
 	* **q_file**: name of file containing q-points to use if q_from_file=.true., ignore if q_from_file=.false.(default)*

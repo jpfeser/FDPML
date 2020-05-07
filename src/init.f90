@@ -9,7 +9,7 @@ MODULE init
 						file_input, qlist_file, slist_file, Llist_file, &
 						Lpoint, spoint, tol, maxit, restart, iterpause, calc_TC, &
 						scattered_energy, scattering_Xsec, plot_K, plot_sig, plot_uinc, plot_uscat, q_from_file, &
-						q_file)
+						q_file, expense_estimate)
 
 		USE kinds
 		IMPLICIT NONE
@@ -24,7 +24,7 @@ MODULE init
 		INTEGER(KIND = 4) 				:: 	maxit, flag
 		INTEGER							::	spoint, Lpoint
 		INTEGER							::	qpoint, nk1, nk2, nk3
-		LOGICAL							::	q_from_file
+		LOGICAL							::	q_from_file, expense_estimate
 		CHARACTER(len = 256)			::	q_file
 		
 		
@@ -56,6 +56,7 @@ MODULE init
 		q_from_file = .false.
 		q_file = 'NA'
 		scattering_Xsec = .false.
+		expense_estimate = .false.
 	!
 	!	--------------------------
 	
