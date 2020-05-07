@@ -1,0 +1,13 @@
+/home/1627/.bash_profile: line 14: workgroup: command not found
+Adding package `gnuplot/5.2.4` to your environment
+My Task ID is :  1
+SLURM parameters:
+  mpirun        = /opt/shared/openmpi/4.0.2-intel/bin/mpirun
+  nhosts        = 
+  nproc         = 
+  executable    = FDPML.out
+  MPI flags     = -np 36
+-- begin OPENMPI run --
+rm: cannot remove ‘*plot’: No such file or directory
+/var/spool/slurm/job8281862/slurm_script: line 143: qpoint: command not found
+slurmstepd: error: *** JOB 8281862 ON r03n08 CANCELLED AT 2020-05-07T13:07:08 ***

@@ -446,6 +446,19 @@ PROGRAM FDPML
 
 	
 	sigmamax = sigmamax*sqrt(w2(mode))/(LPML*(q(3)))
+	
+		
+	IF (root_node) THEN
+		WRITE (stdout, '(a)') '=================Conventional Units=========================='
+		WRITE (stdout, '(a1, a18, F10.3, a, F10.3, a, F10.3)') 	'!',',vg (m/s),', vg(1)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, &
+															',', vg(2)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, & 
+															',', vg(3)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',lambda_inc (nm),', alat1/norm2(q)*BOHR_RADIUS_SI*1d9
+		WRITE (stdout, '(a1, a18, F10.3)') 	'!',',LPML (nm),', LPML*alat1*BOHR_RADIUS_SI*1d9
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',sigmamax (THz),', sigmamax*RY_TO_THZ
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',w (THz),', sqrt(w2(mode))*RY_TO_THZ
+		WRITE (stdout, '(a)') '============================================================='
+	ENDIF
 
 !	========================================================================================
 !	Generating the primary and total domain.
@@ -1183,18 +1196,7 @@ PROGRAM FDPML
 		WRITE (stdout, '(a, F10.3)')	'!,Time,', Total_time/(world_size)
 		WRITE (stdout, '(a)') '============================================================='
 	ENDIF
-	
-		IF (root_node) THEN
-		WRITE (stdout, '(a)') '=================Conventional Units=========================='
-		WRITE (stdout, '(a1, a18, F10.3, a, F10.3, a, F10.3)') 	'!',',vg (m/s),', vg(1)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, &
-															',', vg(2)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, & 
-															',', vg(3)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI
-		WRITE (stdout, '(a1, a18, F10.3)')	'!',',lambda_inc (nm),', alat1/norm2(q)*BOHR_RADIUS_SI*1d9
-		WRITE (stdout, '(a1, a18, F10.3)') 	'!',',LPML (nm),', LPML*alat1*BOHR_RADIUS_SI*1d9
-		WRITE (stdout, '(a1, a18, F10.3)')	'!',',sigmamax (THz),', sigmamax*RY_TO_THZ
-		WRITE (stdout, '(a1, a18, F10.3)')	'!',',w (THz),', sqrt(w2(mode))*RY_TO_THZ
-		WRITE (stdout, '(a)') '============================================================='
-	ENDIF
+
 	
 !	******************************************************************************************
 

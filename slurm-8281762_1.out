@@ -1,0 +1,21 @@
+/home/1627/.bash_profile: line 14: workgroup: command not found
+Adding package `gnuplot/5.2.4` to your environment
+My Task ID is :  1
+SLURM parameters:
+  mpirun        = /opt/shared/openmpi/4.0.2-intel/bin/mpirun
+  nhosts        = 
+  nproc         = 
+  executable    = FDPML.out
+  MPI flags     = -np 1
+-- begin OPENMPI run --
+rm: cannot remove ‘*plot’: No such file or directory
+/var/spool/slurm/job8281762/slurm_script: line 143: qpoint: command not found
+forrtl: severe (19): invalid reference to variable in NAMELIST input, unit 5, file /proc/42414/fd/0, line 19, position 19
+Image              PC                Routine            Line        Source             
+FDPML.out          00000000004B477B  Unknown               Unknown  Unknown
+FDPML.out          00000000004E1432  Unknown               Unknown  Unknown
+FDPML.out          000000000048AF22  MAIN__                    241  FDPML.f90
+FDPML.out          000000000040C3E2  Unknown               Unknown  Unknown
+libc-2.17.so       00002AF326F7B495  __libc_start_main     Unknown  Unknown
+FDPML.out          000000000040C2E9  Unknown               Unknown  Unknown
+Hello
