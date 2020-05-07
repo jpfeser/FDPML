@@ -206,7 +206,7 @@ PROGRAM FDPML
 	REAL(KIND = RP), ALLOCATABLE	::	w2list(:,:), qlist_from_file(:,:)
 	COMPLEX(KIND = CP), ALLOCATABLE	::	zclist(:,:)
 	REAL(KIND =RP)					::	Xsec, Jinc, V
-	REAL(KIND = RP)					::	memory_A, my_memory_A
+	INTEGER							::	mem_ityp_TD, mem_ityp_PD, mem_amass_PD, mem_amass_TD
 	
 	CALL mp_init( )
 	
@@ -700,14 +700,14 @@ PROGRAM FDPML
 !	memory = memory(ilist) + memory(jlist) + memory(Alist) + memory(uinc) + memory(uscat) +&
 !			memory(ityp_PD) + memory(ityp_PD) + memory(amass_PD) + memory(amass_TD) + memory(sig) + &
 !			memory(my_K) + memory(borderlogic)
-	my_memory_A = (IP*my_nnz + RP*my_nnz + 2*CP*my_nnz + 2*CP*my_nrows + 2*CP*my_nrows + &
-					sizeof(ityp_PD) + sizeof(ityp_TD) + sizeof(amass_PD) + sizeof(amass_TD) + &
-					RP*my_nrows + 2*CP*my_nrows + 2.0_RP/8.0_RP*counter2)/GB_byte
-	
-	CALL MPI_REDUCE(my_memory_A, memory_A, 1, mp_real, mp_sumr, root_process, &
-					comm, ierr)
-	
-	if (io_node) WRITE (stdout, '(a, E10.3, a)') 'Total memory requirements for FDPML = ', memory_A, ' GB'	
+
+	mem_ityp_PD = sizeof(ityp_PD)
+	mem_ityp_TD = sizeof(ityp_TD)
+	mem_amass_PD = sizeof(amass_PD)
+	mem_amass_TD = sizeof(amass_TD)
+	CALL print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, mem_ityp_TD, &
+								mem_amass_TD, mem_amass_PD)
+
 	
 	IF (expense_estimate) THEN
 		CALL mp_finalize( )
@@ -731,7 +731,6 @@ PROGRAM FDPML
 
 	IF (ierr.ne.0) THEN
 		WRITE (stdout, '(a)') 'ERROR ALLOCATING MEMORY'
-		WRITE (stdout, '(a, E10.3, a)') 'Total memory requirements for FDPML = ', memory_A, ' GB'
 	ENDIF 
 
 	WRITE (stdout, '(a, I)') 'nnz = ', counter1+my_nrows
@@ -1530,6 +1529,50 @@ FUNCTION maximum(i, j) result(v)
 	END IF
 
 END FUNCTION maximum
+
+SUBROUTINE print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, mem_ityp_TD, &
+								mem_amass_TD, mem_amass_PD)
+
+	USE kinds
+	use, intrinsic :: iso_fortran_env, only : stdin=>input_unit, &
+											  stdout=>output_unit, &
+											  stderr=>error_unit
+	USE constants, ONLY : GB_byte
+	USE mp_module
+	IMPLICIT NONE
+	INTEGER(KIND = IP) 		:: 	my_nnz, my_nrows, counter2, nrows, nnz
+	INTEGER					::	mem_ityp_TD, mem_ityp_PD, mem_amass_TD, mem_amass_PD
+	REAL					::	my_memory_A, memory_A
+	
+	my_memory_A = (IP*my_nnz + RP*my_nnz + 2*CP*my_nnz + 2*CP*my_nrows + 2*CP*my_nrows + &
+					mem_ityp_PD + mem_ityp_TD + mem_amass_PD + mem_amass_TD + &
+					RP*my_nrows + 2*CP*my_nrows + 2.0_RP/8.0_RP*counter2)/GB_byte
+					
+	CALL MPI_REDUCE(my_nnz, nnz, 1, mp_int, mp_sumi, root_process, comm, ierr)
+	
+!	==============MEMORY USAGE OF CRITICAL VARIABLES===========================
+	IF (io_node) THEN
+		WRITE(stdout, '(a)')	'============ MEMORY USAGE ==============='
+		WRITE(stdout, '(a25, E10.3, a3)') 'A-Matrix                         ', real(IP*nnz + RP*nnz + 2*CP*nnz)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'Incident Wave                    ', real(2*CP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'Scattered Wave                   ', real(2*CP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'K-vector                         ', real(2*CP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'Sigma Values                     ', real(2*RP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'borderlogic                     ', real(2.0_RP/8.0_RP*counter2)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'ityp_PD                          ', real(mem_ityp_PD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'ityp_TD                          ', real(mem_ityp_TD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'amass_PD                         ', real(mem_amass_PD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'amass_TD                         ', real(mem_amass_TD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a40)') '--------------------------------------------------------'
+	END IF
+	
+	CALL MPI_REDUCE(my_memory_A, memory_A, 1, mp_real, mp_sumr, root_process, &
+					comm, ierr)
+	
+	if (io_node) WRITE (stdout, '(a25, E10.3, a3)') 'Total memory =           ', memory_A, ' GB'	
+	
+
+END SUBROUTINE print_memory_usage
 
 
 
