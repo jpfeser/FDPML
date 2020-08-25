@@ -229,33 +229,66 @@ MODULE preprocessing_module
 		character(len = 256)			::	domain_file, mass_file
 		REAL							::	PD(3), TD(3)
 		INTEGER, ALLOCATABLE			:: 	ityp_PD(:,:,:,:), ityp_TD(:,:,:,:)
+		INTEGER, AlLOCATABLE			::	my_ityp_PD(:,:,:,:)
 		INTEGER							::	nr1, nr2, nr3, n1, n2, n3, natc, na, ntyp(2)
 		logical							::	mass_input, periodic
 		real(kind = RP), ALLOCATABLE	::	amass_PD(:,:,:,:), amass_TD(:,:,:,:)
+		real(kind = RP), ALLOCATABLE	::	my_amass_PD(:,:,:,:)
 		real(kind = RP)					::	amass1(ntyp(1)), amass2(ntyp(2))
 		integer							::	LPML
 		INTEGER							::	itypc(natc)
-				
-		ALLOCATE(ityp_PD(int(PD(1)), int(PD(2)), int(PD(3)), natc))
-		if (mass_input) ALLOCATE (amass_PD(int(PD(1)), int(PD(2)), int(PD(3)), natc))
+		INTEGER(KIND = IP)				::	recv_values(world_size), displs(world_size)
+		INTEGER							::	my_nr3, nr3_start
+		INTEGER							:: 	status(MPI_STATUS_SIZE), fh
+		INTEGER(KIND = MPI_OFFSET_KIND)	:: 	offset
+		INTEGER							:: 	type_size
+		INTEGER(KIND = IP)				::	my_natoms
 		
-		IF (io_node) THEN
-			open (unit  = 1, file = domain_file, form = 'unformatted')
-			read (unit = 1) ityp_PD
-			close(unit = 1)
-		ENDIF
+		nr1 = PD(1)
+		nr2 = PD(2)
+		nr3 = PD(3)
 		
+		CALL get_nr3(nr3, my_nr3, nr3_start)
+		ALLOCATE(my_ityp_PD(natc,nr1,nr2,my_nr3), my_amass_PD(natc,nr1,nr2,my_nr3))
 		
-		CALL MPI_BCAST(ityp_PD, size(ityp_PD), MPI_INT, root_process, comm, ierr)
-			
+		CALL MPI_File_open(comm, domain_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
+		CALL MPI_Type_size(MPI_INT, type_size, ierr)
+		offset = (nr1*nr2*natc*nr3_start)*type_size
+		CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
+		CALL MPI_File_read_all(fh, my_ityp_PD, size(my_ityp_PD), MPI_INT, status, ierr)
+		CAlL MPI_File_close(fh, ierr)
+		
 		IF (mass_input) THEN
-			IF (io_node) THEN
-				open (unit  = 1, file = mass_file, form = 'unformatted')
-				read (unit = 1) amass_PD
-				close(unit = 1)
-			ENDIF
-			CALL MPI_BCAST(amass_PD, size(amass_PD), mp_real, root_process, comm, ierr)	
-		ENDIF
+			CALL MPI_File_open(comm, mass_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
+			CALL MPI_TYPE_size(mp_real, type_size, ierr)
+			offset = (nr1*nr2*natc*nr3_start)*type_size
+			CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
+			CALL MPI_File_read_all(fh, my_ityp_PD, size(my_amass_PD), mp_real, status, ierr)
+			CAlL MPI_File_close(fh, ierr)
+		END IF
+				
+		ALLOCATE(ityp_PD(natc, int(PD(1)), int(PD(2)), int(PD(3))))
+		if (mass_input) ALLOCATE (amass_PD(natc, int(PD(1)), int(PD(2)), int(PD(3))))
+		
+!		IF (io_node) THEN
+!			open (unit  = 1, file = domain_file, form = 'unformatted')
+!			read (unit = 1) ityp_PD
+!			close(unit = 1)
+!		ENDIF
+		
+		
+!		CALL MPI_BCAST(ityp_PD, size(ityp_PD), MPI_INT, root_process, comm, ierr)
+			
+!		IF (mass_input) THEN
+!			IF (io_node) THEN
+!				open (unit  = 1, file = mass_file, form = 'unformatted')
+!				read (unit = 1) amass_PD
+!				close(unit = 1)
+!			ENDIF
+!			CALL MPI_BCAST(amass_PD, size(amass_PD), mp_real, root_process, comm, ierr)	
+!		ENDIF
+
+		
 		
 		
 	!	----------------------------------------------------------------------------------------
@@ -265,9 +298,18 @@ MODULE preprocessing_module
 	!	The Total domain defines the type of atom for every atom inside the simulation
 	!	cell
 	
+		my_natoms = size(my_ityp_PD)
+		CALL MPI_ALLGATHER(my_natoms, 1, mp_int, recv_values, 1, mp_int, comm, ierr)
+		print *, recv_values
+		CALL calculate_displs(recv_values, displs)
+		CALL MPI_ALLGATHERV(my_ityp_PD, my_natoms, MPI_INT, ityp_PD, int(recv_values), int(displs), &
+							MPI_INT, comm, ierr)
+							
+		if (mass_input) CALL MPI_ALLGATHERV(my_amass_PD, size(my_amass_PD), mp_real, amass_PD, int(recv_values), &
+											int(displs), mp_real, comm, ierr)
+		
 		ALLOCATE(ityp_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
-		ALLOCATE(amass_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
-	
+		if (mass_input) ALLOCATE(amass_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
 	
 		IF (periodic) THEN
 			DO n1 = 1, TD(1)
@@ -281,9 +323,9 @@ MODULE preprocessing_module
 								(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
 								(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
 	!							If the atom is inside the Primary domain
-								ityp_TD(n1,n2,n3,na)= ityp_PD(n1, n2, n3-LPML, na)
+								ityp_TD(n1,n2,n3,na)= ityp_PD(na, n1, n2, n3-LPML)
 								IF (mass_input) THEN
-									amass_TD(n1,n2,n3,na) = amass_PD(n1,n2,n3-LPML, na)
+									amass_TD(n1,n2,n3,na) = amass_PD(na, n1, n2, n3-LPML)
 								ELSE
 									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
 										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
@@ -315,10 +357,10 @@ MODULE preprocessing_module
 								(n3.lt.(TD(3)/2.D0+PD(3)/2.D0))) THEN
 	!							If the atom is inside the Primary domain
 								ityp_TD(n1,n2,n3,na)= &
-									ityp_PD(n1-LPML, n2-LPML, n3-LPML, na)
+									ityp_PD(na, n1-LPML, n2-LPML, n3-LPML)
 								IF (mass_input) THEN
-									amass_TD(n1,n2,n3,na) = amass_PD(n1-LPML,n2-LPML,&
-																		n3-LPML, na)
+									amass_TD(n1,n2,n3,na) = amass_PD(na, n1-LPML,n2-LPML,&
+																		n3-LPML)
 								ELSE
 									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
 										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
@@ -336,7 +378,7 @@ MODULE preprocessing_module
 			ENDDO
 		ENDIF
 		
-		call print_domain(PD, TD, ityp_PD(:,:,:,1), ityp_TD(:,:,:,2))
+		call print_domain(PD, TD, ityp_PD(1,:,:,:), ityp_TD(:,:,:,1))
 		
 		
 	END SUBROUTINE
@@ -391,6 +433,45 @@ MODULE preprocessing_module
 				ENDDO
 			ENDDO
 		ENDIF
+		
+		CALL MPI_ABORT(comm, ierr)
+		
+	END SUBROUTINE
+	
+	SUBROUTINE get_nr3(nr3, my_nr3, nr3_start)
+	
+		IMPLICIT NONE
+		INCLUDE 'mpif.h' ! MPI header file
+		
+		INTEGER				:: nr3, my_nr3, everyones_nr3(world_size), nr3_start, rem, i, cumulative
+		
+	
+		my_nr3 = nr3/world_size
+		rem = MOD(nr3,world_size)
+			
+		IF (my_id.gt.(world_size-rem-1)) THEN
+			my_nr3 = my_nr3+1
+		ENDIF
+		
+		
+		CALL MPI_ALLGATHER(my_nr3, 1, MPI_INT, everyones_nr3, 1, MPI_INT, comm, ierr)
+		
+		cumulative = 0
+		DO i = 0, world_size-1
+			IF (i .eq. my_id) THEN
+				nr3_start = cumulative
+			END IF
+			cumulative = cumulative + everyones_nr3(i+1)
+		END DO
+		
+		IF (cumulative .ne. nr3) THEN
+			IF (io_node) WRITE(stdout, '(a)') 'Problems with splitting up the domain'
+			CALL MPI_ABORT(comm, ierr)
+		END IF
+		
 	END SUBROUTINE
 	
 END MODULE preprocessing_module
+
+
+

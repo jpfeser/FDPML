@@ -29,7 +29,7 @@
 #----------------------------------
 #                Farber parameters
 # tells cluster to assign (20) processors
-#$ -pe mpi 36
+#$ -pe mpi 5
 # tells cluster to allocate 1GB memory PER processor
 # $ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
@@ -46,7 +46,7 @@
 #      Load any packages you need to run it
 vpkg_require openmpi/intel64
 vpkg_require gnuplot/4.6
-OPENMPI_FLAGS='-np 36'
+OPENMPI_FLAGS='-np 5'
 
 L=`expr $SGE_TASK_ID % 11`
 s=`expr $SGE_TASK_ID / 11`
@@ -97,13 +97,13 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	mass_file = '${MASS}', 
 	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
 	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
-	mass_input = .false.
+	mass_input = .true.
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 11, 11, 20
+	PD(1) = 11, 11, 22
 	LPML = ${PMLL}
-	periodic = .false.
+	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
 	wavetype = 'full'
@@ -146,7 +146,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 /
 EOF
 
-
+echo $MY_EXE
 
 mpirun -quiet ${OPENMPI_FLAGS} $MY_EXE < test_input.${SGE_TASK_ID} > output_test.o${SGE_TASK_ID}
 

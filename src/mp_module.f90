@@ -107,7 +107,7 @@ CONTAINS
 	END SUBROUTINE
 
 	SUBROUTINE calculate_displs(counts, displs)
-		INTEGER(KIND = RP), DIMENSION(world_size) :: counts, displs
+		INTEGER(KIND = IP), DIMENSION(world_size) :: counts, displs
 		INTEGER :: i
 		displs(1)=0
 		DO i=2,world_size
