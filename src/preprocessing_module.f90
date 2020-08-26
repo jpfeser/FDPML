@@ -241,21 +241,32 @@ MODULE preprocessing_module
 		INTEGER							::	my_nr3, nr3_start
 		INTEGER							:: 	status(MPI_STATUS_SIZE), fh
 		INTEGER(KIND = MPI_OFFSET_KIND)	:: 	offset
-		INTEGER							:: 	type_size
+		INTEGER							:: 	type_size, counter
 		INTEGER(KIND = IP)				::	my_natoms
+		INTEGER							::	yplane, i
 		
 		nr1 = PD(1)
 		nr2 = PD(2)
 		nr3 = PD(3)
 		
+		
+!		There is a bug in the code where the MPI_READ only works if the number of processors set
+!		during this run is the same as what was set when generating the domain and mass files.
+!		I've not been able to locate the source of error and spent ton of time on it. 
+!		Rohit
+
 		CALL get_nr3(nr3, my_nr3, nr3_start)
 		ALLOCATE(my_ityp_PD(natc,nr1,nr2,my_nr3), my_amass_PD(natc,nr1,nr2,my_nr3))
+		
+		my_natoms = size(my_ityp_PD)
 		
 		CALL MPI_File_open(comm, domain_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
 		CALL MPI_Type_size(MPI_INT, type_size, ierr)
 		offset = (nr1*nr2*natc*nr3_start)*type_size
 		CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
-		CALL MPI_File_read_all(fh, my_ityp_PD, size(my_ityp_PD), MPI_INT, status, ierr)
+		CALL MPI_File_read_all(fh, my_ityp_PD, my_natoms, MPI_INT, status, ierr)
+		CALL MPI_GET_count(status, MPI_INT, counter, ierr)
+		print *, my_id, counter
 		CAlL MPI_File_close(fh, ierr)
 		
 		IF (mass_input) THEN
@@ -298,88 +309,103 @@ MODULE preprocessing_module
 	!	The Total domain defines the type of atom for every atom inside the simulation
 	!	cell
 	
-		my_natoms = size(my_ityp_PD)
-		CALL MPI_ALLGATHER(my_natoms, 1, mp_int, recv_values, 1, mp_int, comm, ierr)
-		print *, recv_values
-		CALL calculate_displs(recv_values, displs)
-		CALL MPI_ALLGATHERV(my_ityp_PD, my_natoms, MPI_INT, ityp_PD, int(recv_values), int(displs), &
-							MPI_INT, comm, ierr)
+!		CALL MPI_ALLGATHER(my_natoms, 1, mp_int, recv_values, 1, mp_int, comm, ierr)
+!		CALL calculate_displs(recv_values, displs)
+!		CALL MPI_ALLGATHERV(my_ityp_PD, my_natoms, MPI_INT, ityp_PD, int(recv_values), int(displs), &
+!							MPI_INT, comm, ierr)
 							
-		if (mass_input) CALL MPI_ALLGATHERV(my_amass_PD, size(my_amass_PD), mp_real, amass_PD, int(recv_values), &
-											int(displs), mp_real, comm, ierr)
+!		if (mass_input) CALL MPI_ALLGATHERV(my_amass_PD, size(my_amass_PD), mp_real, amass_PD, int(recv_values), &
+!											int(displs), mp_real, comm, ierr)
 		
-		ALLOCATE(ityp_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
-		if (mass_input) ALLOCATE(amass_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
+!		ALLOCATE(ityp_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
+!		if (mass_input) ALLOCATE(amass_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
 	
-		IF (periodic) THEN
-			DO n1 = 1, TD(1)
-				DO n2 = 1, TD(2)
-					DO n3 = 1, TD(3)
-						DO na = 1, natc
-							IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
-								(n1.le.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
-								(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
-								(n2.le.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
-								(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
-								(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
-	!							If the atom is inside the Primary domain
-								ityp_TD(n1,n2,n3,na)= ityp_PD(na, n1, n2, n3-LPML)
-								IF (mass_input) THEN
-									amass_TD(n1,n2,n3,na) = amass_PD(na, n1, n2, n3-LPML)
-								ELSE
-									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
-										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
-										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-									ENDIF
-								ENDIF
-							ELSEIF (n3.lt.TD(3)/2) THEN
-								ityp_TD(n1,n2,n3,na) = 1
-								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-							ELSEIF (n3.ge.TD(3)/2) THEN
-								ityp_TD(n1,n2,n3,na) = 2
-								amass_TD(n1,n2,n3,na) = amass2(itypc(na))
-							ENDIF
-						ENDDO
-					ENDDO
-				ENDDO
-			ENDDO
-		ELSE
-			DO n1 = 1, TD(1)
-				DO n2 = 1, TD(2)
-					DO n3 = 1, TD(3)
-						DO na = 1, natc
-							IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
-								(n1.lt.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
-								(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
-								(n2.lt.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
-								(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
-								(n3.lt.(TD(3)/2.D0+PD(3)/2.D0))) THEN
-	!							If the atom is inside the Primary domain
-								ityp_TD(n1,n2,n3,na)= &
-									ityp_PD(na, n1-LPML, n2-LPML, n3-LPML)
-								IF (mass_input) THEN
-									amass_TD(n1,n2,n3,na) = amass_PD(na, n1-LPML,n2-LPML,&
-																		n3-LPML)
-								ELSE
-									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
-										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
-										amass_TD(n1,n2,n3,na) = amass2(itypc(na))
-									ENDIF
-								ENDIF
-							ELSE
-								ityp_TD(n1,n2,n3,na) = 1
-								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-							ENDIF
-						ENDDO
-					ENDDO
-				ENDDO
-			ENDDO
-		ENDIF
+!		IF (periodic) THEN
+!			DO n1 = 1, TD(1)
+!				DO n2 = 1, TD(2)
+!					DO n3 = 1, TD(3)
+!						DO na = 1, natc
+!							IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
+!								(n1.le.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
+!								(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
+!								(n2.le.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
+!								(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
+!								(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
+!	!							If the atom is inside the Primary domain
+!								ityp_TD(n1,n2,n3,na)= ityp_PD(na, n1, n2, n3-LPML)
+!								IF (mass_input) THEN
+!									amass_TD(n1,n2,n3,na) = amass_PD(na, n1, n2, n3-LPML)
+!								ELSE
+!									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
+!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+!									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
+!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+!									ENDIF
+!								ENDIF
+!							ELSEIF (n3.lt.TD(3)/2) THEN
+!								ityp_TD(n1,n2,n3,na) = 1
+!								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+!							ELSEIF (n3.ge.TD(3)/2) THEN
+!								ityp_TD(n1,n2,n3,na) = 2
+!								amass_TD(n1,n2,n3,na) = amass2(itypc(na))
+!							ENDIF
+!						ENDDO
+!					ENDDO
+!				ENDDO
+!			ENDDO
+!		ELSE
+!			DO n1 = 1, TD(1)
+!				DO n2 = 1, TD(2)
+!					DO n3 = 1, TD(3)
+!						DO na = 1, natc
+!							IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
+!								(n1.lt.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
+!								(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
+!								(n2.lt.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
+!								(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
+!								(n3.lt.(TD(3)/2.D0+PD(3)/2.D0))) THEN
+!	!							If the atom is inside the Primary domain
+!								ityp_TD(n1,n2,n3,na)= &
+!									ityp_PD(na, n1-LPML, n2-LPML, n3-LPML)
+!								IF (mass_input) THEN
+!									amass_TD(n1,n2,n3,na) = amass_PD(na, n1-LPML,n2-LPML,&
+!																		n3-LPML)
+!								ELSE
+!									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
+!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+!									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
+!										amass_TD(n1,n2,n3,na) = amass2(itypc(na))
+!									ENDIF
+!								ENDIF
+!							ELSE
+!								ityp_TD(n1,n2,n3,na) = 1
+!								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+!							ENDIF
+!						ENDDO
+!					ENDDO
+!				ENDDO
+!			ENDDO
+!		ENDIF
 		
-		call print_domain(PD, TD, ityp_PD(1,:,:,:), ityp_TD(:,:,:,1))
+!		call print_domain(PD, TD, my_ityp_PD(1,:,:,:), ityp_TD(:,:,:,1))
+
+		yplane = int(PD(2)/2.D0)
+
+		WRITE (stdout, *) '--------------------------------------------------------'
+		WRITE (stdout, *) 'Cross-sectional image of PD (check if this is correct)', my_id
+		WRITE (stdout, *) '--------------------------------------------------------'
+		DO n1 = 1, PD(1)
+			DO n3 = 1, my_nr3
+				IF (n3.eq.my_nr3) THEN
+					write(stdout, fmt = '(I2)') my_ityp_PD(1, n1,yplane,n3)
+				ELSE
+					write(stdout, fmt = '(I2)', advance = 'no') &
+											my_ityp_PD(1, n1,yplane,n3)
+				ENDIF
+			ENDDO
+		ENDDO
 		
+		CALL MPI_ABORT(comm, ierr)
 		
 	END SUBROUTINE
 
