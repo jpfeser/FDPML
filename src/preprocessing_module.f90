@@ -220,8 +220,8 @@ MODULE preprocessing_module
 
 !	=========================================================================================
 	
-	SUBROUTINE gen_TD(domain_file, mass_file, amass_TD, ityp_TD, PD, TD, periodic, ntyp, &
-						amass1,	amass2, natc, itypc, mass_input, LPML)
+	SUBROUTINE gen_TD(domain_file, mass_file, my_amass_TD, my_ityp_TD, PD, TD, periodic, ntyp, &
+						amass1,	amass2, natc, itypc, mass_input, LPML, nr3)
 
 		USE essentials
 
@@ -229,13 +229,11 @@ MODULE preprocessing_module
 		INCLUDE 'mpif.h' ! MPI header file
 		character(len = 256)			::	domain_file, mass_file
 		REAL							::	PD(3), TD(3)
-		INTEGER, ALLOCATABLE			:: 	ityp_PD(:,:,:,:), ityp_TD(:,:,:,:)
 		INTEGER, AlLOCATABLE			::	my_ityp_PD(:,:,:,:), my_ityp_TD(:,:,:,:)
-		INTEGER							::	nr1, nr2, nr3, n1, n2, n3, natc, na, ntyp(2), my_n3, isub(4), &
+		INTEGER							::	nr3, n1, n2, n3, natc, na, ntyp(2), my_n3, isub(4), &
 											nentries
 		logical							::	mass_input, periodic
-		real(kind = RP), ALLOCATABLE	::	amass_PD(:,:,:,:), amass_TD(:,:,:,:)
-		real(kind = RP), ALLOCATABLE	::	my_amass_PD(:,:,:,:)
+		real(kind = RP), ALLOCATABLE	::	my_amass_PD(:,:,:,:), my_amass_TD(:,:,:,:)
 		real(kind = RP)					::	amass1(ntyp(1)), amass2(ntyp(2))
 		integer							::	LPML, summation
 		INTEGER							::	itypc(natc)
@@ -281,8 +279,6 @@ MODULE preprocessing_module
 			CAlL MPI_File_close(fh, ierr)
 		END IF
 				
-		ALLOCATE(ityp_PD(natc, int(PD(1)), int(PD(2)), int(PD(3))))
-		if (mass_input) ALLOCATE (amass_PD(natc, int(PD(1)), int(PD(2)), int(PD(3))))
 		
 !		IF (io_node) THEN
 !			open (unit  = 1, file = domain_file, form = 'unformatted')
@@ -416,7 +412,8 @@ MODULE preprocessing_module
 				
 		CALL MPI_ALLGATHER(PD3_start, 1, MPI_INT, everyones_PD3_start, 1, MPI_INT, comm, ierr)
 		
-		ALLOCATE(my_ityp_TD(natc, int(TD(1)), int(TD(2)), my_TD3))
+		ALLOCATE(my_ityp_TD(natc, int(TD(1)), int(TD(2)), (-2*nr3+1):(my_TD3 + 2*nr3)) , &
+				 my_amass_TD(natc, int(TD(1)), int(TD(2)), (-2*nr3+1):(my_TD3 + 2*nr3)))
 		
 		get_buffer(:, 1) = huge(1)
 		get_buffer(:, 2) = -1
@@ -427,7 +424,7 @@ MODULE preprocessing_module
 		IF (periodic) THEN
 			DO n1 = 1, TD(1)
 				DO n2 = 1, TD(2)
-					DO my_n3 = 1, my_TD3
+					DO my_n3 = -2*nr3+1, my_TD3 + 2*nr3
 						n3 = TD3_start + my_n3
 						IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
 							(n1.le.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
@@ -437,34 +434,28 @@ MODULE preprocessing_module
 							(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
 !							If the atom is inside the Primary domain
 							CALL get_rank(n3 - LPML, rank, location, everyones_PD3_start)
-							location = location * nr1 * nr2 * natc
+							location = location * int(PD(1)) * int(PD(2)) * natc
 							IF (get_buffer(rank, 1) .gt. location) &
 											get_buffer(rank, 1) = location
-							IF (get_buffer(rank, 2) .lt. (location + nr1 * nr2 * natc)) &
-											get_buffer(rank, 2) = location + nr1 * nr2 * natc
+							IF (get_buffer(rank, 2) .lt. (location + int(PD(1)) * int(PD(2)) * natc)) &
+											get_buffer(rank, 2) = location + int(PD(1)) * int(PD(2)) * natc
 							
-							IF (put_buffer(rank, 1) .gt. ((my_n3 - 1)* int(TD(1)) * int(TD(2)) *natc)) &
-												put_buffer(rank, 1) = ((my_n3-1)* int(TD(1)) * int(TD(2)) *natc)
-							IF (put_buffer(rank, 2) .lt. ((my_n3)* int(TD(1)) * int(TD(2)) *natc)) &
-												put_buffer(rank, 2) = ((my_n3)* int(TD(1)) * int(TD(2)) *natc)
+							IF (put_buffer(rank, 1) .gt. ((my_n3 - 1 + 2*nr3)* int(TD(1)) * int(TD(2)) *natc)) &
+												put_buffer(rank, 1) = ((my_n3-1 + 2*nr3)* int(TD(1)) * int(TD(2)) *natc)
+							IF (put_buffer(rank, 2) .lt. ((my_n3 + 2*nr3)* int(TD(1)) * int(TD(2)) *natc)) &
+												put_buffer(rank, 2) = ((my_n3 + 2*nr3)* int(TD(1)) * int(TD(2)) *natc)
 							
-!								IF (mass_input) THEN
-!									amass_TD(n1,n2,n3,na) = amass_PD(na, n1, n2, n3-LPML)
-!								ELSE
-!									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
-!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
-!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!									ENDIF
-!								ENDIF
+
 						ELSEIF (n3.lt.TD(3)/2) THEN
 							my_ityp_TD(:, n1, n2, my_n3) = 1
-							summation = summation + natc
-!								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+							DO na = 1, natc
+								my_amass_TD(na, n1, n2, my_n3) = amass1(itypc(na))
+							END DO
 						ELSEIF (n3.ge.TD(3)/2) THEN
 							my_ityp_TD(:, n1, n2, my_n3) = 2
-							summation = summation + natc
-!								amass_TD(n1,n2,n3,na) = amass2(itypc(na))
+							DO na = 1, natc
+								my_amass_TD(na, n1, n2, my_n3) = amass1(itypc(na))
+							END DO
 						ENDIF
 					ENDDO
 				ENDDO
@@ -520,6 +511,9 @@ MODULE preprocessing_module
 		
 		CALL MPI_ALLTOALLV(	my_ityp_PD, scounts, sdispls, MPI_INT, &
 							my_ityp_TD, recvcounts, recvdispls, MPI_INT, comm, ierr)
+							
+		CALL MPI_ALLTOALLV( my_amass_PD, scounts, sdispls, mp_real, &
+							my_amass_TD, recvcounts, recvdispls, mp_real, comm, ierr)
 !		print *, size(my_ityp_TD) - summation
 		
 		yplane = int(TD(2)/2.D0)
@@ -528,8 +522,8 @@ MODULE preprocessing_module
 		WRITE (stdout, *) 'Cross-sectional image of PD (check if this is correct)', my_id
 		WRITE (stdout, *) '--------------------------------------------------------'
 		DO n1 = 1, TD(1)
-			DO n3 = 1, my_TD3
-				IF (n3.eq.my_TD3) THEN
+			DO n3 = -2*nr3 + 1, my_TD3 + 2*nr3
+				IF (n3.eq.my_TD3 + 2*nr3) THEN
 					write(stdout, fmt = '(I2)') my_ityp_TD(1, n1,yplane,n3)
 				ELSE
 					write(stdout, fmt = '(I2)', advance = 'no') &
@@ -538,8 +532,8 @@ MODULE preprocessing_module
 			ENDDO
 		ENDDO
 		
-		CALL MPI_ABORT(comm, ierr)
-		
+		CALL MPI_ABORT(comm, 911, ierr)
+				
 	END SUBROUTINE
 
 !	==========================================================================================

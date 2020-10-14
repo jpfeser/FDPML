@@ -470,7 +470,7 @@ PROGRAM FDPML
 !	Loading the primary domain
 
 	call gen_TD(domain_file, mass_file, amass_TD, ityp_TD, PD, TD, periodic, ntyp, &
-						amass1, amass2, natc, itypc, mass_input, LPML)
+						amass1, amass2, natc, itypc, mass_input, LPML, nr3)
 						
 !**	
 	CALL cpu_time(finish)
