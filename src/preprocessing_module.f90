@@ -223,27 +223,34 @@ MODULE preprocessing_module
 	SUBROUTINE gen_TD(domain_file, mass_file, amass_TD, ityp_TD, PD, TD, periodic, ntyp, &
 						amass1,	amass2, natc, itypc, mass_input, LPML)
 
+		USE essentials
 
 		IMPLICIT NONE
 		INCLUDE 'mpif.h' ! MPI header file
 		character(len = 256)			::	domain_file, mass_file
 		REAL							::	PD(3), TD(3)
 		INTEGER, ALLOCATABLE			:: 	ityp_PD(:,:,:,:), ityp_TD(:,:,:,:)
-		INTEGER, AlLOCATABLE			::	my_ityp_PD(:,:,:,:)
-		INTEGER							::	nr1, nr2, nr3, n1, n2, n3, natc, na, ntyp(2)
+		INTEGER, AlLOCATABLE			::	my_ityp_PD(:,:,:,:), my_ityp_TD(:,:,:,:)
+		INTEGER							::	nr1, nr2, nr3, n1, n2, n3, natc, na, ntyp(2), my_n3, isub(4), &
+											nentries
 		logical							::	mass_input, periodic
 		real(kind = RP), ALLOCATABLE	::	amass_PD(:,:,:,:), amass_TD(:,:,:,:)
 		real(kind = RP), ALLOCATABLE	::	my_amass_PD(:,:,:,:)
 		real(kind = RP)					::	amass1(ntyp(1)), amass2(ntyp(2))
-		integer							::	LPML
+		integer							::	LPML, summation
 		INTEGER							::	itypc(natc)
 		INTEGER(KIND = IP)				::	recv_values(world_size), displs(world_size)
-		INTEGER							::	my_nr3, nr3_start
+		INTEGER							::	my_nr3, nr3_start, my_TD3, TD3_start, &
+											everyones_PD3_start(world_size), rank, location, testing, &
+											get_buffer(world_size, 2), put_buffer(world_size, 2)
 		INTEGER							:: 	status(MPI_STATUS_SIZE), fh
 		INTEGER(KIND = MPI_OFFSET_KIND)	:: 	offset
 		INTEGER							:: 	type_size, counter
 		INTEGER(KIND = IP)				::	my_natoms
 		INTEGER							::	yplane, i
+		INTEGER					 		:: 	win
+		INTEGER							::	recvdispls(world_size), recvcounts(world_size), &
+											sdispls(world_size), scounts(world_size)
 		
 		nr1 = PD(1)
 		nr2 = PD(2)
@@ -266,7 +273,6 @@ MODULE preprocessing_module
 		CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
 		CALL MPI_File_read_all(fh, my_ityp_PD, my_natoms, MPI_INT, status, ierr)
 		CALL MPI_GET_count(status, MPI_INT, counter, ierr)
-		print *, my_id, counter
 		CAlL MPI_File_close(fh, ierr)
 		
 		IF (mass_input) THEN
@@ -389,18 +395,148 @@ MODULE preprocessing_module
 		
 !		call print_domain(PD, TD, my_ityp_PD(1,:,:,:), ityp_TD(:,:,:,1))
 
-		yplane = int(PD(2)/2.D0)
+!		yplane = int(PD(2)/2.D0)
 
+!		WRITE (stdout, *) '--------------------------------------------------------'
+!		WRITE (stdout, *) 'Cross-sectional image of PD (check if this is correct)', my_id
+!		WRITE (stdout, *) '--------------------------------------------------------'
+!		DO n1 = 1, PD(1)
+!			DO n3 = 1, my_nr3
+!				IF (n3.eq.my_nr3) THEN
+!					write(stdout, fmt = '(I2)') my_ityp_PD(1, n1,yplane,n3)
+!				ELSE
+!					write(stdout, fmt = '(I2)', advance = 'no') &
+!											my_ityp_PD(1, n1,yplane,n3)
+!				ENDIF
+!			ENDDO
+!		ENDDO
+		
+!		CALL MPI_WIN_CREATE(my_ityp_PD, sizeof(my_ityp_PD), sizeof(my_ityp_PD)/size(my_ityp_PD), &
+!							MPI_INFO_NULL, comm, win, ierr)
+							
+		
+		CALL get_nr3(int(TD(3)), my_TD3, TD3_start)
+				
+		CALL MPI_ALLGATHER(nr3_start, 1, MPI_INT, everyones_PD3_start, 1, MPI_INT, comm, ierr)
+		
+		ALLOCATE(my_ityp_TD(natc, int(TD(1)), int(TD(2)), my_TD3))
+		
+		get_buffer(:, 1) = huge(1)
+		get_buffer(:, 2) = -1
+		put_buffer(:, 1) = huge(1)
+		put_buffer(:, 2) = -1
+		summation = 0
+		
+		IF (periodic) THEN
+			DO n1 = 1, TD(1)
+				DO n2 = 1, TD(2)
+					DO my_n3 = 1, my_TD3
+						n3 = TD3_start + my_n3
+						IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
+							(n1.le.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
+							(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
+							(n2.le.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
+							(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
+							(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
+!							If the atom is inside the Primary domain
+							CALL get_rank(n3 - LPML, rank, location, everyones_PD3_start)
+							location = location * nr1 * nr2 * natc
+							IF (get_buffer(rank, 1) .gt. location) &
+											get_buffer(rank, 1) = location
+							IF (get_buffer(rank, 2) .lt. (location + nr1 * nr2 * natc)) &
+											get_buffer(rank, 2) = location + nr1 * nr2 * natc
+							
+							IF (put_buffer(rank, 1) .gt. ((my_n3 - 1)* int(TD(1)) * int(TD(2)) *natc)) &
+												put_buffer(rank, 1) = ((my_n3-1)* int(TD(1)) * int(TD(2)) *natc)
+							IF (put_buffer(rank, 2) .lt. ((my_n3)* int(TD(1)) * int(TD(2)) *natc)) &
+												put_buffer(rank, 2) = ((my_n3)* int(TD(1)) * int(TD(2)) *natc)
+							
+!								IF (mass_input) THEN
+!									amass_TD(n1,n2,n3,na) = amass_PD(na, n1, n2, n3-LPML)
+!								ELSE
+!									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
+!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+!									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
+!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+!									ENDIF
+!								ENDIF
+						ELSEIF (n3.lt.TD(3)/2) THEN
+							my_ityp_TD(:, n1, n2, my_n3) = 1
+							summation = summation + natc
+!								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
+						ELSEIF (n3.ge.TD(3)/2) THEN
+							my_ityp_TD(:, n1, n2, my_n3) = 2
+							summation = summation + natc
+!								amass_TD(n1,n2,n3,na) = amass2(itypc(na))
+						ENDIF
+					ENDDO
+				ENDDO
+			ENDDO
+		ENDIF
+		
+		CALL MPI_BARRIER(comm, ierr)
+
+!		WRITE (stdout, *) '--------------------------------------------------------'
+!		WRITE (stdout, *) 'writing get buffer for ', my_id
+!		WRITE (stdout, *) '--------------------------------------------------------'
+		
+!		DO i = 1, world_size
+!			print *, get_buffer(i, 1), get_buffer(i, 2)
+!			print *, put_buffer(i, 1), put_buffer(i, 2)
+!		END DO
+
+
+		DO rank = 1, world_size
+			IF ((put_buffer(rank, 1) .eq. huge(1)) .or. &
+				(put_buffer(rank, 2) .eq. -1)) THEN
+				get_buffer(rank, 1) = 0
+				get_buffer(rank, 2) = 0
+				recvcounts(rank) = 0
+				recvdispls(rank) = 0
+			ELSE
+				get_buffer(rank, 2) = get_buffer(rank, 2) - get_buffer(rank, 1)
+				recvdispls(rank) = put_buffer(rank, 1)
+				recvcounts(rank) = put_buffer(rank, 2) - put_buffer(rank, 1)
+			END IF			
+		END DO
+		
+!		WRITE (stdout, *) '--------------------------------------------------------'
+!		WRITE (stdout, *) 'writing get buffer for ', my_id
+!		WRITE (stdout, *) '--------------------------------------------------------'
+		
+!		DO i = 1, world_size
+!			print *, get_buffer(i, 1), get_buffer(i, 2)
+!			print *, recvdispls(i), recvcounts(i)
+!		END DO
+		
+		CALL MPI_ALLTOALL(get_buffer(:,1), 1, MPI_INT, sdispls, 1, MPI_INT, comm, ierr)
+		CALL MPI_ALLTOALL(get_buffer(:,2), 1, MPI_INT, scounts, 1, MPI_INT, comm, ierr)
+		
+		WRITE (stdout, *) '--------------------------------------------------------'
+		WRITE (stdout, *) 'writing get buffer for ', my_id + 1
+		WRITE (stdout, *) '--------------------------------------------------------'
+		
+		DO i = 1, world_size
+			print *, 'send', i, sdispls(i), scounts(i)
+			print *, 'recv', i, recvdispls(i), recvcounts(i)
+		END DO
+		
+		CALL MPI_ALLTOALLV(	my_ityp_PD, scounts, sdispls, MPI_INT, &
+							my_ityp_TD, recvcounts, recvdispls, MPI_INT, comm, ierr)
+!		print *, size(my_ityp_TD) - summation
+		
+		yplane = int(TD(2)/2.D0)
+		
 		WRITE (stdout, *) '--------------------------------------------------------'
 		WRITE (stdout, *) 'Cross-sectional image of PD (check if this is correct)', my_id
 		WRITE (stdout, *) '--------------------------------------------------------'
-		DO n1 = 1, PD(1)
-			DO n3 = 1, my_nr3
-				IF (n3.eq.my_nr3) THEN
-					write(stdout, fmt = '(I2)') my_ityp_PD(1, n1,yplane,n3)
+		DO n1 = 1, TD(1)
+			DO n3 = 1, my_TD3
+				IF (n3.eq.my_TD3) THEN
+					write(stdout, fmt = '(I2)') my_ityp_TD(1, n1,yplane,n3)
 				ELSE
 					write(stdout, fmt = '(I2)', advance = 'no') &
-											my_ityp_PD(1, n1,yplane,n3)
+											my_ityp_TD(1, n1,yplane,n3)
 				ENDIF
 			ENDDO
 		ENDDO
@@ -495,6 +631,25 @@ MODULE preprocessing_module
 			CALL MPI_ABORT(comm, ierr)
 		END IF
 		
+	END SUBROUTINE
+	
+	SUBROUTINE get_rank(n3, rank, location, everyones_PD3_start)
+	
+		IMPLICIT NONE
+		INTEGER			:: n3, rank, location, everyones_PD3_start(world_size), i
+		
+		DO i = 1, world_size-1
+			IF (n3 .gt. everyones_PD3_start(i+1)) THEN
+				CYCLE
+			ELSE
+				rank = i
+				location = n3 - everyones_PD3_start(i) - 1
+				RETURN
+			END IF
+		END DO
+		
+		rank = world_size
+		location = n3 - everyones_PD3_start(world_size) - 1
 	END SUBROUTINE
 	
 END MODULE preprocessing_module
