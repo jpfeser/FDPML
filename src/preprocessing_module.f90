@@ -240,7 +240,7 @@ MODULE preprocessing_module
 		integer							::	LPML, summation
 		INTEGER							::	itypc(natc)
 		INTEGER(KIND = IP)				::	recv_values(world_size), displs(world_size)
-		INTEGER							::	my_nr3, nr3_start, my_TD3, TD3_start, &
+		INTEGER							::	my_PD3, PD3_start, my_TD3, TD3_start, &
 											everyones_PD3_start(world_size), rank, location, testing, &
 											get_buffer(world_size, 2), put_buffer(world_size, 2)
 		INTEGER							:: 	status(MPI_STATUS_SIZE), fh
@@ -252,24 +252,21 @@ MODULE preprocessing_module
 		INTEGER							::	recvdispls(world_size), recvcounts(world_size), &
 											sdispls(world_size), scounts(world_size)
 		
-		nr1 = PD(1)
-		nr2 = PD(2)
-		nr3 = PD(3)
-		
 		
 !		There is a bug in the code where the MPI_READ only works if the number of processors set
 !		during this run is the same as what was set when generating the domain and mass files.
 !		I've not been able to locate the source of error and spent ton of time on it. 
 !		Rohit
 
-		CALL get_nr3(nr3, my_nr3, nr3_start)
-		ALLOCATE(my_ityp_PD(natc,nr1,nr2,my_nr3), my_amass_PD(natc,nr1,nr2,my_nr3))
+		CALL get_nr3(int(PD(3)), my_PD3, PD3_start)
+		ALLOCATE(my_ityp_PD(natc,int(PD(1)),int(PD(2)),my_PD3), &
+					my_amass_PD(natc,int(PD(1)),int(PD(2)),my_PD3))
 		
 		my_natoms = size(my_ityp_PD)
 		
 		CALL MPI_File_open(comm, domain_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
 		CALL MPI_Type_size(MPI_INT, type_size, ierr)
-		offset = (nr1*nr2*natc*nr3_start)*type_size
+		offset = (int(PD(1))*int(PD(2))*natc*PD3_start)*type_size
 		CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
 		CALL MPI_File_read_all(fh, my_ityp_PD, my_natoms, MPI_INT, status, ierr)
 		CALL MPI_GET_count(status, MPI_INT, counter, ierr)
@@ -278,7 +275,7 @@ MODULE preprocessing_module
 		IF (mass_input) THEN
 			CALL MPI_File_open(comm, mass_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
 			CALL MPI_TYPE_size(mp_real, type_size, ierr)
-			offset = (nr1*nr2*natc*nr3_start)*type_size
+			offset = (int(PD(1))*int(PD(2))*natc*PD3_start)*type_size
 			CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
 			CALL MPI_File_read_all(fh, my_ityp_PD, size(my_amass_PD), mp_real, status, ierr)
 			CAlL MPI_File_close(fh, ierr)
@@ -417,7 +414,7 @@ MODULE preprocessing_module
 		
 		CALL get_nr3(int(TD(3)), my_TD3, TD3_start)
 				
-		CALL MPI_ALLGATHER(nr3_start, 1, MPI_INT, everyones_PD3_start, 1, MPI_INT, comm, ierr)
+		CALL MPI_ALLGATHER(PD3_start, 1, MPI_INT, everyones_PD3_start, 1, MPI_INT, comm, ierr)
 		
 		ALLOCATE(my_ityp_TD(natc, int(TD(1)), int(TD(2)), my_TD3))
 		
