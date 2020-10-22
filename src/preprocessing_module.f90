@@ -221,7 +221,7 @@ MODULE preprocessing_module
 !	=========================================================================================
 	
 	SUBROUTINE gen_TD(domain_file, mass_file, my_amass_TD, my_ityp_TD, PD, TD, periodic, ntyp, &
-						amass1,	amass2, natc, itypc, mass_input, LPML, nr3)
+						amass1,	amass2, natc, itypc, mass_input, LPML, nr3, my_TD3, TD3_start)
 
 		USE essentials
 
@@ -269,7 +269,7 @@ MODULE preprocessing_module
 		CALL MPI_File_read_all(fh, my_ityp_PD, my_natoms, MPI_INT, status, ierr)
 		CALL MPI_GET_count(status, MPI_INT, counter, ierr)
 		CAlL MPI_File_close(fh, ierr)
-		
+				
 		IF (mass_input) THEN
 			CALL MPI_File_open(comm, mass_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
 			CALL MPI_TYPE_size(mp_real, type_size, ierr)
@@ -419,7 +419,7 @@ MODULE preprocessing_module
 		get_buffer(:, 2) = -1
 		put_buffer(:, 1) = huge(1)
 		put_buffer(:, 2) = -1
-		summation = 0
+!		summation = 0
 		
 		IF (periodic) THEN
 			DO n1 = 1, TD(1)
@@ -444,7 +444,6 @@ MODULE preprocessing_module
 												put_buffer(rank, 1) = ((my_n3-1 + 2*nr3)* int(TD(1)) * int(TD(2)) *natc)
 							IF (put_buffer(rank, 2) .lt. ((my_n3 + 2*nr3)* int(TD(1)) * int(TD(2)) *natc)) &
 												put_buffer(rank, 2) = ((my_n3 + 2*nr3)* int(TD(1)) * int(TD(2)) *natc)
-							
 
 						ELSEIF (n3.lt.TD(3)/2) THEN
 							my_ityp_TD(:, n1, n2, my_n3) = 1
@@ -454,7 +453,7 @@ MODULE preprocessing_module
 						ELSEIF (n3.ge.TD(3)/2) THEN
 							my_ityp_TD(:, n1, n2, my_n3) = 2
 							DO na = 1, natc
-								my_amass_TD(na, n1, n2, my_n3) = amass1(itypc(na))
+								my_amass_TD(na, n1, n2, my_n3) = amass2(itypc(na))
 							END DO
 						ENDIF
 					ENDDO
@@ -462,7 +461,6 @@ MODULE preprocessing_module
 			ENDDO
 		ENDIF
 		
-		CALL MPI_BARRIER(comm, ierr)
 
 !		WRITE (stdout, *) '--------------------------------------------------------'
 !		WRITE (stdout, *) 'writing get buffer for ', my_id
@@ -488,33 +486,49 @@ MODULE preprocessing_module
 			END IF			
 		END DO
 		
-!		WRITE (stdout, *) '--------------------------------------------------------'
-!		WRITE (stdout, *) 'writing get buffer for ', my_id
-!		WRITE (stdout, *) '--------------------------------------------------------'
+!!		WRITE (stdout, *) '--------------------------------------------------------'
+!!		WRITE (stdout, *) 'writing get buffer for ', my_id
+!!		WRITE (stdout, *) '--------------------------------------------------------'
 		
-!		DO i = 1, world_size
-!			print *, get_buffer(i, 1), get_buffer(i, 2)
-!			print *, recvdispls(i), recvcounts(i)
-!		END DO
+!!		DO i = 1, world_size
+!!			print *, get_buffer(i, 1), get_buffer(i, 2)
+!!			print *, recvdispls(i), recvcounts(i)
+!!		END DO
 		
 		CALL MPI_ALLTOALL(get_buffer(:,1), 1, MPI_INT, sdispls, 1, MPI_INT, comm, ierr)
 		CALL MPI_ALLTOALL(get_buffer(:,2), 1, MPI_INT, scounts, 1, MPI_INT, comm, ierr)
 		
-		WRITE (stdout, *) '--------------------------------------------------------'
-		WRITE (stdout, *) 'writing get buffer for ', my_id + 1
-		WRITE (stdout, *) '--------------------------------------------------------'
+!		WRITE (stdout, *) '--------------------------------------------------------'
+!		WRITE (stdout, *) 'writing get buffer for ', my_id + 1
+!		WRITE (stdout, *) '--------------------------------------------------------'
 		
-		DO i = 1, world_size
-			print *, 'send', i, sdispls(i), scounts(i)
-			print *, 'recv', i, recvdispls(i), recvcounts(i)
-		END DO
+!		DO i = 1, world_size
+!			print *, 'send', i, sdispls(i), scounts(i)
+!			print *, 'recv', i, recvdispls(i), recvcounts(i)
+!		END DO
 		
 		CALL MPI_ALLTOALLV(	my_ityp_PD, scounts, sdispls, MPI_INT, &
 							my_ityp_TD, recvcounts, recvdispls, MPI_INT, comm, ierr)
 							
-		CALL MPI_ALLTOALLV( my_amass_PD, scounts, sdispls, mp_real, &
+		IF (mass_input) THEN
+			CALL MPI_ALLTOALLV( my_amass_PD, scounts, sdispls, mp_real, &
 							my_amass_TD, recvcounts, recvdispls, mp_real, comm, ierr)
-!		print *, size(my_ityp_TD) - summation
+		ELSE
+			DO n1 = 1, TD(1)
+				DO n2 = 1, TD(2)
+					DO my_n3 = -2*nr3+1, my_TD3 + 2*nr3
+						DO na = 1, natc
+							IF (my_ityp_TD(na, n1, n2, my_n3) .eq. 1) THEN
+								my_amass_TD(na, n1, n2, my_n3) = amass1(itypc(na))
+							ELSE IF (my_ityp_TD(na, n1, n2, my_n3) .eq. 2) THEN
+								my_amass_TD(na, n1, n2, my_n3) = amass2(itypc(na))
+							ENDIF
+						END DO
+					END DO
+				END DO
+			END DO
+		ENDIF
+!!		print *, size(my_ityp_TD) - summation
 		
 		yplane = int(TD(2)/2.D0)
 		
@@ -531,8 +545,10 @@ MODULE preprocessing_module
 				ENDIF
 			ENDDO
 		ENDDO
+
+!		print *, 'Hello'
 		
-		CALL MPI_ABORT(comm, 911, ierr)
+!		RETURN
 				
 	END SUBROUTINE
 

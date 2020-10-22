@@ -74,7 +74,7 @@ MODULE matgen_module
 !	=========================================================================================
 
 	SUBROUTINE gen_sig(sig, my_natoms, sigmamax, LPML, periodic, atc, atom_tuple, &
-						TD, PD, atoms_start, ityp_TD, tauc, natc)
+						TD, PD, atoms_start, my_ityp_TD, tauc, natc, my_TD3, nr3, TD3_start)
 !	generate the damping coefficients for every atom inside the simulation domain						
 
 	
@@ -82,7 +82,8 @@ MODULE matgen_module
 		USE mp_module
 		USE essentials
 		IMPLICIT NONE
-		INTEGER								::	counter, p, i1, i2, i3, ia, ityp, natc
+		INTEGER								::	counter, p, i1, i2, i3, ia, ityp, natc, my_TD3, nr3, &
+												TD3_start
 		INTEGER(KIND = IP)					::	my_natoms
 		REAL(KIND = RP)						::	sigmamax
 		LOGICAL								::	periodic
@@ -92,8 +93,9 @@ MODULE matgen_module
 		INTEGER(KIND = IP)					::	atom_tuple(4), atoms_start(world_size)
 		REAL(KIND = RP)						::	r(3)
 		REAL								::	TD(3), PD(3)
-		INTEGER								::	ityp_TD(int(TD(1)), int(TD(2)),&
-														int(TD(3)), natc), LPML
+		INTEGER								::	my_ityp_TD(natc, int(TD(1)), &
+															int(TD(2)), (-2*nr3+1):(my_TD3 + 2*nr3)), &
+															LPML
 		REAL(KIND = RP)						::	tauc(3,natc)
 		
 		
@@ -110,9 +112,9 @@ MODULE matgen_module
 			ia = atom_tuple(1)
 			i1 = atom_tuple(2)
 			i2 = atom_tuple(3)
-			i3 = atom_tuple(4)
-			ityp = ityp_TD(i1,i2,i3,ia)
-			r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3-1)*atc(:,3) + tauc(:,ia)
+			i3 = atom_tuple(4) - TD3_start
+			ityp = my_ityp_TD(ia, i1, i2, i3)
+			r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3 + TD3_start -1)*atc(:,3) + tauc(:,ia)
 			IF (r(1).lt.((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0)) THEN
 		        sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0))**2
 			ELSEIF (r(1).gt.((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0)) THEN

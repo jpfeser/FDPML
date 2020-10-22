@@ -129,8 +129,8 @@ PROGRAM FDPML
 	REAL 							:: 	PD(3), TD(3), center(3), atc(3,3) 
 	REAL(KIND = RP), ALLOCATABLE 	:: 	tauc(:,:)
 	INTEGER, ALLOCATABLE 			:: 	itypc(:)
-	INTEGER, ALLOCATABLE 			:: 	ityp_PD(:,:,:,:), ityp_TD(:,:,:,:)
-	REAL(KIND = RP), ALLOCATABLE 	:: 	amass_PD(:,:,:,:), amass_TD(:,:,:,:)
+	INTEGER, ALLOCATABLE 			:: 	ityp_PD(:,:,:,:), ityp_TD(:,:,:,:), my_ityp_TD(:,:,:,:)
+	REAL(KIND = RP), ALLOCATABLE 	:: 	amass_PD(:,:,:,:), amass_TD(:,:,:,:), my_amass_TD(:,:,:,:)
 	INTEGER 						:: 	n1, n2, n3, na, i, j, i1, i2, i3, &
 										nb, ia, ib, ipol, jpol ! counters
 	INTEGER 						:: 	LPML, natoms_PML
@@ -145,7 +145,7 @@ PROGRAM FDPML
 	COMPLEX(KIND = CP), ALLOCATABLE :: 	Alist(:)
 	REAL(KIND = RP), ALLOCATABLE	::	sig(:,:)
 	REAL(KIND=RP) 					:: 	rws(0:3,nrwsx), atws(3,3)
-	INTEGER 						:: 	nrws
+	INTEGER 						:: 	nrws, my_TD3, TD3_start
 	REAL 							:: 	start, finish
 !	*****************************************************************************************
 !	Local variables
@@ -469,8 +469,9 @@ PROGRAM FDPML
 !
 !	Loading the primary domain
 
-	call gen_TD(domain_file, mass_file, amass_TD, ityp_TD, PD, TD, periodic, ntyp, &
-						amass1, amass2, natc, itypc, mass_input, LPML, nr3)
+	call gen_TD(domain_file, mass_file, my_amass_TD, my_ityp_TD, PD, TD, periodic, ntyp, &
+						amass1, amass2, natc, itypc, mass_input, LPML, nr3, my_TD3, TD3_start)
+
 						
 !**	
 	CALL cpu_time(finish)
@@ -485,7 +486,8 @@ PROGRAM FDPML
 !	=========================================================================================
 	
 	call get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
-						atoms_start, everyones_rows, TD, natc, ityp_TD)
+						atoms_start, everyones_rows, TD, natc)
+						
 
 !	=========================================================================================
 !	Generate Incident wave
@@ -499,7 +501,7 @@ PROGRAM FDPML
 !	Generating the damping coefficients
 
 	CALL gen_sig(sig, my_natoms, sigmamax, LPML, periodic, atc, atom_tuple, &
-						TD, PD, atoms_start, ityp_TD, tauc, natc)
+						TD, PD, atoms_start, my_ityp_TD, tauc, natc, my_TD3, nr3, TD3_start)
 
 !	=======================================================================================
 
@@ -543,6 +545,8 @@ PROGRAM FDPML
 	CALL MPI_BCAST(wscache, ((4*nr1+1)*(4*nr2+1)*(4*nr3+1)*nat(1)*nat(2)), mp_real, root_process, comm, ierr)
 !	----------------------------------------------------------------------------------------
 
+
+
 !	Counter loop to find how much memory is needed for Alist, ilist and jlist
 	counter1 = 0	!	counter for ilist, jlist and Alist
 	counter2 = 0	!	counter for atoms connected ouside the domain
@@ -553,8 +557,8 @@ PROGRAM FDPML
 		ia = atom_tuple(1)
 		i1 = atom_tuple(2)
 		i2 = atom_tuple(3)
-		i3 = atom_tuple(4)
-		ityp = ityp_TD(i1,i2,i3,ia)
+		i3 = atom_tuple(4) - TD3_start
+		ityp = my_ityp_TD(ia, i1, i2, i3)
 		na = na_vec(ia)
 		IF (ityp.eq.1) THEN
 			DO n1 = -2*nr1,2*nr1
@@ -572,7 +576,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start - 1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at1(:,1) + n2*at1(:,2) + &
 									n3*at1(:,3)+ tau1(:,nb)
 								r = floor(r)
@@ -634,7 +638,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start - 1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at2(:,1) + n2*at2(:,2) + &
 									n3*at2(:,3)+ tau2(:,nb)
 								r = floor(r)
@@ -680,6 +684,7 @@ PROGRAM FDPML
 		ENDIF	
 	ENDDO
 	
+	
 !	sig_atoms accounts for the total number of nnz needed for adding the sigma elements 
 !	to Amat
 	
@@ -717,7 +722,7 @@ PROGRAM FDPML
 	mem_ityp_PD = sizeof(ityp_PD)
 	mem_ityp_TD = sizeof(ityp_TD)
 	mem_amass_PD = sizeof(amass_PD)
-	mem_amass_TD = sizeof(amass_TD)
+	mem_amass_TD = sizeof(my_amass_TD)
 	CALL print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, mem_ityp_TD, &
 								mem_amass_TD, mem_amass_PD)
 
@@ -744,6 +749,7 @@ PROGRAM FDPML
 											  ! Amat = -(m*w**2+K) equn A3 on 
 											  !	PHYSICAL REVIEW B 95, 125434 (2017)
 
+
 	IF (ierr.ne.0) THEN
 		WRITE (stdout, '(a)') 'ERROR ALLOCATING MEMORY'
 	ENDIF 
@@ -763,8 +769,8 @@ PROGRAM FDPML
 		ia = atom_tuple(1)
 		i1 = atom_tuple(2)
 		i2 = atom_tuple(3)
-		i3 = atom_tuple(4)
-		ityp = ityp_TD(i1,i2,i3,ia)
+		i3 = atom_tuple(4) - TD3_start
+		ityp = my_ityp_TD(ia, i1, i2, i3)
 		na = na_vec(ia)
 		IF (ityp.eq.1) THEN
 			DO n1 = -2*nr1,2*nr1
@@ -780,7 +786,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start -1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at1(:,1) + n2*at1(:,2) + &
 									n3*at1(:,3)+ tau1(:,nb)
 								r = floor(r)
@@ -816,9 +822,9 @@ PROGRAM FDPML
 								Location = sub2ind(iSub, nSub) ! transform 3-D space 
 															   ! to 1-D
 
-								mass1 = amass_TD(i1,i2,i3,ia)
-								mass2 = amass_TD(int(r(1))+1,int(r(2))+1,&
-												 int(r(3))+1,ib)
+								mass1 = my_amass_TD(ia, i1, i2, i3)
+								mass2 = my_amass_TD(ib, int(r(1))+1,int(r(2))+1,&
+												 int(r(3))+1 - TD3_start)
 !								mass1 = amass1(ityp2(na))
 !								IF (ityp_TD(int(r(1))+1, int(r(2))+1, &
 !											int(r(3))+1, ib).eq.2) THEN
@@ -842,6 +848,7 @@ PROGRAM FDPML
 										IF ((sqrt(mass1*mass2).eq.0.D0) .or. &
 											(w2(mode).eq.0.D0)) THEN
 											print *, 'HELLO'
+											EXIT
 										ENDIF
 									ENDDO
 								ENDDO
@@ -865,7 +872,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start -1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at2(:,1) + n2*at2(:,2) + &
 									n3*at2(:,3)+ tau2(:,nb)
 								r = floor(r)
@@ -892,9 +899,9 @@ PROGRAM FDPML
 								isub = (/ ib, int(r(1))+1, int(r(2))+1, &
 											int(r(3))+1 /)
 								Location = sub2ind(iSub, nSub)
-								mass1 = amass_TD(i1,i2,i3,ia)
-								mass2 = amass_TD(int(r(1))+1,int(r(2))+1,&
-												 int(r(3))+1,ib)
+								mass1 = my_amass_TD(ia, i1, i2, i3)
+								mass2 = my_amass_TD(ib, int(r(1))+1,int(r(2))+1,&
+												 int(r(3))+1 - TD3_start)
 !								mass1 = amass2(ityp2(na))
 !								IF (ityp_TD(int(r(1))+1, int(r(2))+1, &
 !											int(r(3))+1, ib).eq.2) THEN
@@ -919,6 +926,7 @@ PROGRAM FDPML
 										IF ((sqrt(mass1*mass2).eq.0.D0) .or. &
 											(w2(mode).eq.0.D0)) THEN
 											print *, 'HELLO'
+											EXIT
 										ENDIF
 									ENDDO
 								ENDDO
@@ -929,7 +937,6 @@ PROGRAM FDPML
 			ENDDO
 		ENDIF	
 	ENDDO
-	
 	
 !	CALL MPI_REDUCE(my_BW, BW, 1, mp_int, mp_maxi, root_node, comm, ierr)
 	
@@ -971,6 +978,8 @@ PROGRAM FDPML
 	DO i = 1, counter2
 		my_K(borderlogic(i)) = CMPLX(0.0, 0.0, KIND = CP)
 	ENDDO
+	
+
 !	==========================================================================================
 
 !	******************************************************************************************
@@ -995,6 +1004,8 @@ PROGRAM FDPML
 	CALL cpu_time(finish)
 	
 	matrix_time = finish - start
+	
+
 	
 !	OPEN (unit = 666, file = 'Alist.txt', form = 'formatted')
 	
@@ -1092,8 +1103,8 @@ PROGRAM FDPML
 			ia = atom_tuple(1)
 			i1 = atom_tuple(2)
 			i2 = atom_tuple(3)
-			i3 = atom_tuple(4)
-			ityp = ityp_TD(i1,i2,i3,ia)
+			i3 = atom_tuple(4) - TD3_start
+			ityp = my_ityp_TD(ia, i1, i2, i3)
 			na = na_vec(ia)
 			IF (i3.lt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
@@ -1130,8 +1141,8 @@ PROGRAM FDPML
 			ia = atom_tuple(1)
 			i1 = atom_tuple(2)
 			i2 = atom_tuple(3)
-			i3 = atom_tuple(4)
-			ityp = ityp_TD(i1,i2,i3,ia)
+			i3 = atom_tuple(4) - TD3_start
+			ityp = my_ityp_TD(ia, i1, i2, i3)
 			na = na_vec(ia)
 			IF (ityp.eq.1) THEN
 				DO ipol = 1,3
