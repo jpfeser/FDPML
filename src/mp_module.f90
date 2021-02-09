@@ -107,7 +107,7 @@ CONTAINS
 	END SUBROUTINE
 
 	SUBROUTINE calculate_displs(counts, displs)
-		INTEGER(KIND = RP), DIMENSION(world_size) :: counts, displs
+		INTEGER(KIND = IP), DIMENSION(world_size) :: counts, displs
 		INTEGER :: i
 		displs(1)=0
 		DO i=2,world_size
@@ -134,7 +134,7 @@ CONTAINS
 	END SUBROUTINE
 	
 	SUBROUTINE get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
-						atoms_start, everyones_rows, TD, natc, ityp_TD)
+						atoms_start, everyones_rows, TD, natc)
 						
 !	Calculate the number of atoms(rows) assigned to every processor
 !	Nomenclature :
@@ -157,10 +157,10 @@ CONTAINS
 												everyones_rows(world_size)
 		INTEGER								::	natc, i
 		REAL								::	TD(3)
-		INTEGER								::	ityp_TD(int(TD(1)),int(TD(2)),int(TD(3)),natc)
 		
 		
-		natoms = size(ityp_TD)
+		natoms = int(TD(1))*int(TD(2))*int(TD(3))*natc
+		print *, 'Hello'
 		nrows = 3*natoms
 		if (io_node) WRITE (stdout, '(a, I11)')' Total number of atoms inside simulation cell =',&
 										natoms

@@ -29,7 +29,7 @@
 #----------------------------------
 #                Farber parameters
 # tells cluster to assign (20) processors
-#$ -pe mpi 36
+#$ -pe mpi 5
 # tells cluster to allocate 1GB memory PER processor
 # $ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
@@ -46,7 +46,7 @@
 #      Load any packages you need to run it
 vpkg_require openmpi/intel64
 vpkg_require gnuplot/4.6
-OPENMPI_FLAGS='-np 36'
+OPENMPI_FLAGS='-np 5'
 
 L=`expr $SGE_TASK_ID % 11`
 s=`expr $SGE_TASK_ID / 11`
@@ -72,7 +72,7 @@ echo "Lpoint = " $L
 echo "spoint = " $s
 echo "qpoint = " $qp
 
-PMLL=10
+PMLL=50
 
 #
 # The MPI program to execute:
@@ -95,22 +95,22 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &filenames
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
-	flfrc1 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/GaAs/results/GaAs444.fc'
+	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
+	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
 	mass_input = .false.
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 11, 11, 20
+	PD(1) = 11, 11, 22
 	LPML = ${PMLL}
-	periodic = .false.
+	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'full'
+	wavetype = 'half'
 	q(1) = 0.0, 0.0, 0.1
 	mode = 3
-	sigmamax = 3
-	expense_estimate = .true.
+	sigmamax = 2
+	expense_estimate = .false.
 /
   &qlists
 	q_from_file = .false.
@@ -146,7 +146,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 /
 EOF
 
-
+echo $MY_EXE
 
 mpirun -quiet ${OPENMPI_FLAGS} $MY_EXE < test_input.${SGE_TASK_ID} > output_test.o${SGE_TASK_ID}
 
