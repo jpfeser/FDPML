@@ -8,6 +8,7 @@ MODULE preprocessing_module
 !	====================================================================================================
 
 	SUBROUTINE get_natsc(at, atc, nat, natsc, crystal_coordinates)
+	! determine the number of atoms in the supercell, natsc, using information about the primitive
 		
 		USE essentials
 		IMPLICIT NONE
@@ -275,7 +276,7 @@ MODULE preprocessing_module
 			CALL MPI_TYPE_size(mp_real, type_size, ierr)
 			offset = (int(PD(1))*int(PD(2))*natc*PD3_start)*type_size
 			CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
-			CALL MPI_File_read_all(fh, my_ityp_PD, size(my_amass_PD), mp_real, status, ierr)
+			CALL MPI_File_read_all(fh, my_amass_PD, size(my_amass_PD), mp_real, status, ierr)
 			CAlL MPI_File_close(fh, ierr)
 		END IF
 				
@@ -407,7 +408,7 @@ MODULE preprocessing_module
 !		CALL MPI_WIN_CREATE(my_ityp_PD, sizeof(my_ityp_PD), sizeof(my_ityp_PD)/size(my_ityp_PD), &
 !							MPI_INFO_NULL, comm, win, ierr)
 							
-		
+		WRITE(stdout, "(a,i5)") 'TD(3)=',int(TD(3))
 		CALL get_nr3(int(TD(3)), my_TD3, TD3_start)
 				
 		CALL MPI_ALLGATHER(PD3_start, 1, MPI_INT, everyones_PD3_start, 1, MPI_INT, comm, ierr)
@@ -421,7 +422,7 @@ MODULE preprocessing_module
 		put_buffer(:, 2) = -1
 !		summation = 0
 		
-		IF (periodic) THEN
+		IF (periodic) THEN !Um, what does it do if it's NOT periodic?  Looks like it's broken for that case
 			DO n1 = 1, TD(1)
 				DO n2 = 1, TD(2)
 					DO my_n3 = -2*nr3+1, my_TD3 + 2*nr3
@@ -535,9 +536,26 @@ MODULE preprocessing_module
 		WRITE (stdout, *) '--------------------------------------------------------'
 		WRITE (stdout, *) 'Cross-sectional image of PD (check if this is correct)', my_id
 		WRITE (stdout, *) '--------------------------------------------------------'
+
+			!
+			! I only want to show what atoms are in the central domain...not which ones that connect with!
+!!					DO n1 = 1, TD(1)
+!!		DO n3 = -2*nr3 + 1, my_TD3 + 2*nr3
+!!				IF (n3.eq.my_TD3 + 2*nr3) THEN
+!!					write(stdout, fmt = '(I2)') my_ityp_TD(1, n1,yplane,n3)
+!!				ELSE
+!!					write(stdout, fmt = '(I2)', advance = 'no') &
+!!											my_ityp_TD(1, n1,yplane,n3)
+!!				ENDIF
+!!			ENDDO
+!!		ENDDO
+		
 		DO n1 = 1, TD(1)
-			DO n3 = -2*nr3 + 1, my_TD3 + 2*nr3
-				IF (n3.eq.my_TD3 + 2*nr3) THEN
+			!
+			! I only want to show what atoms are in the central domain...not which ones that connect with!
+			DO n3 = 1, my_TD3
+				IF (n3.eq.my_TD3) THEN
+					! only advance to next line after writing all other n3 entries
 					write(stdout, fmt = '(I2)') my_ityp_TD(1, n1,yplane,n3)
 				ELSE
 					write(stdout, fmt = '(I2)', advance = 'no') &
@@ -607,6 +625,8 @@ MODULE preprocessing_module
 		
 	END SUBROUTINE
 	
+	!	====================================================================================================
+	
 	SUBROUTINE get_nr3(nr3, my_nr3, nr3_start)
 	
 		IMPLICIT NONE
@@ -616,11 +636,13 @@ MODULE preprocessing_module
 		
 	
 		my_nr3 = nr3/world_size
+		
 		rem = MOD(nr3,world_size)
 			
 		IF (my_id.gt.(world_size-rem-1)) THEN
 			my_nr3 = my_nr3+1
 		ENDIF
+		WRITE(stdout, '(a11, i3, a15, i5)') 'Processor ',my_id,' says my_nr3 = ', my_nr3
 		
 		
 		CALL MPI_ALLGATHER(my_nr3, 1, MPI_INT, everyones_nr3, 1, MPI_INT, comm, ierr)
@@ -640,7 +662,10 @@ MODULE preprocessing_module
 		
 	END SUBROUTINE
 	
+	!	====================================================================================================
+	
 	SUBROUTINE get_rank(n3, rank, location, everyones_PD3_start)
+	! what is the goal of this subroutine?  what is 'location'?  location of what?
 	
 		IMPLICIT NONE
 		INTEGER			:: n3, rank, location, everyones_PD3_start(world_size), i

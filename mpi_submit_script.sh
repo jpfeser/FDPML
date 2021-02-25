@@ -29,15 +29,14 @@
 #----------------------------------
 #                Farber parameters
 # tells cluster to assign (20) processors
-#$ -pe mpi 5
+#$ -pe mpi 20
 # tells cluster to allocate 1GB memory PER processor
-# $ -l m_mem_free=3G
+#$ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
-# $ -l exclusive=1
+#$ -l exclusive=1
 # send script to the standby queue
-#$ -l standby=1,h_rt=4:00:00
+# $ -l standby=1,h_rt=4:00:00
 # setup messaging about (b)egin, (e)nd, (a)bort, and (s) of your program
-# $ -o mpi_submit_script.sh.out
 # $ -m beas
 # send messages to this email address
 # -M 9735252392@vtext.com
@@ -46,7 +45,8 @@
 #      Load any packages you need to run it
 vpkg_require openmpi/intel64
 vpkg_require gnuplot/4.6
-OPENMPI_FLAGS='-np 5'
+OPENMPI_FLAGS='-np 20'
+
 
 L=`expr $SGE_TASK_ID % 11`
 s=`expr $SGE_TASK_ID / 11`
@@ -72,14 +72,14 @@ echo "Lpoint = " $L
 echo "spoint = " $s
 echo "qpoint = " $qp
 
-PMLL=50
+PMLL=5
 
 #
 # The MPI program to execute:
 #
 MY_EXE="bin/FDPML.out"
 
-TMP_DIR='/lustre/scratch/rohitk/FDPML_tmp'
+TMP_DIR='/lustre/scratch/jpfeser/FDPML_tmp'
 DOMAIN="${TMP_DIR}/Domain.dat"
 MASS="${TMP_DIR}/mass.dat"
 
@@ -95,21 +95,21 @@ cat > test_input.${SGE_TASK_ID} << EOF
   &filenames
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
-	flfrc1 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc', 
-	flfrc2 = '/home/1628/QuantumEspresso/Si/results/Si_q2.fc'
+	flfrc1 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Si_q2.fc', 
+	flfrc2 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Ge_q2.fc'
 	mass_input = .false.
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 11, 11, 22
+	PD(1) = 16, 16, 60
 	LPML = ${PMLL}
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'half'
-	q(1) = 0.0, 0.0, 0.1
+	wavetype = 'full'
+	q(1) = 0.0, 0.0, 0.4
 	mode = 3
-	sigmamax = 2
+	sigmamax = 1
 	expense_estimate = .false.
 /
   &qlists
@@ -124,7 +124,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	tmp_dir='${TMP_DIR}' 
 /
   &postprocessing
-	calc_TC = .true.
+	calc_TC = .false.
 	scattered_energy= .true.
 	scattering_Xsec = .true.
 /

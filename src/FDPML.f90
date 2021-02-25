@@ -237,14 +237,61 @@ PROGRAM FDPML
 						plot_uscat, q_from_file, q_file, expense_estimate)
 	
 	IF (root_node) THEN
+		WRITE(stdout, "(a)") '-----------------BEGIN READING OF NAMELISTS------------------------' 
 		READ(stdin, filenames)
+			WRITE (stdout, "(a)") '------ filenames NAMELIST ------'
+			WRITE (stdout, "(a, a)") 'Reading mass file from ', domain_file
+			WRITE (stdout, "(a, a)") 'Reading 1st FC file from ', flfrc1
+			WRITE (stdout, "(a, a)") 'Reading 2nd FC file from ', flfrc2
+			WRITE (stdout, "(a, L1)") 'Am I reading a mass_input file? ', mass_input
+			WRITE (stdout, "(a, a)") 'If so, reading mass file from ', mass_file
 		READ(stdin, system)
+			WRITE (stdout, "(a)") '------ system  ------'
+			WRITE (stdout, "(a, a)") 'What type of simulation is it? ', simulation_type
+			WRITE (stdout, "(a, L1)") 'Is the domain periodic? ', periodic 
+			WRITE (stdout, "(a, L1)") 'Are we workding in crystal coordinates?', crystal_coordinates
+			WRITE (stdout, "(a, i, a, i, a, i)") 'The primary domain has dimensions: ', int(PD(1)), ' x ', int(PD(2)), 'x', int(PD(3))
+			WRITE (stdout, "(a, i5)") 'We will be using PMLs with dimension (in unit cells) of:  ', LPML
+			WRITE (stdout, "(a, F10.3)") 'Using a parabolically graded pml with sigmamax/omega = ',sigmamax 
+			WRITE (stdout, "(a, a)") 'The incident wave will be generated as (half or full):  ', wavetype
+			WRITE (stdout, "(a,F10.3,a,F10.3,a,F10.3,a,i3)") 'specifically we are simulating q=(', q(1), ', ', q(2), ', ', q(3),') mode #', mode
+			WRITE (stdout, "(a, L1)") 'Is this only an expense estimate run (memory calculation)? ', expense_estimate
+			WRITE (stdout, "(a, a)") 'What type of acoustic sum rule (asr) are we implimenting? ', asr 
 		READ(stdin, qlists)
+			WRITE (stdout, "(a)") '------ qlists ------'
+			WRITE (stdout, "(a, L1)") 'Are we reading a qlist from file?', q_from_file
+			WRITE (stdout, "(a, a)") 'Q: If so, where is it?  A:', q_file
 		READ(stdin, solver)
+			WRITE (stdout, "(a)") '------ solver ------'
+			WRITE (stdout, "(a, E10.3)") 'what is the tolerance?',tol
+			WRITE (stdout, "(a, i)") 'how many iterations for the biconjugate gradient solver? A: ',maxit
 		READ(stdin, restartoptions)
+			WRITE (stdout, "(a)") '------ restartoptions ------'
+			WRITE (stdout, "(a, L1)") 'Are we restarting from a saved point?', restart
+			WRITE (stdout, "(a,a)") 'Where are we storing the .save files? ', tmp_dir
+			WRITE (stdout, "(a,i)") 'How often should .save files be created (# of iter)? ', iterpause
 		READ(stdin, postprocessing)
+			WRITE (stdout, "(a)") '------ postprocessing ------'
+			WRITE (stdout, "(a, L1)") 'Calculating transmission coefficient? ', calc_TC
+			WRITE (stdout, "(a, L1)") 'Calculating scattered energy? ', scattered_energy
+			WRITE (stdout, "(a, L1)") 'Calculating scattering cross-section? ', scattering_Xsec
 		READ(stdin, plots)
+			WRITE (stdout, "(a)") '------ plotting ------'
+			WRITE (stdout, "(a, L1)") 'plotting K (RHS of equation)? ', plot_K
+			WRITE (stdout, "(a, L1)") 'plotting sigma? ', plot_sig
+			WRITE (stdout, "(a, L1)") 'plotting uscat? ', plot_uinc
+			WRITE (stdout, "(a, a)") 'plotting mode? ',  plottingmode
 		READ(stdin, calibrate)
+			WRITE (stdout, "(a)") '------ calibrate (calibration of PML parameters)------'
+			WRITE (stdout, "(a, L1)") 'Is this a calibration run, where the the q, sigma, LPML will be read from a file? ', file_input
+			WRITE (stdout, "(a)") 'If so....'
+			WRITE (stdout, "(a, a)") 'where is the list of q found?', qlist_file
+			WRITE (stdout, "(a, i5)") 'of which were reading row #', qpoint 
+			WRITE (stdout, "(a, a)") 'where is the list of sigma found? ', slist_file
+			WRITE (stdout, "(a, i5)") 'of which were reading row #', spoint 
+			WRITE (stdout, "(a, a)") 'where is the list of LPML found? ', Llist_file
+			WRITE (stdout, "(a, i5)") 'of which were reading row #', Lpoint 
+		WRITE(stdout, "(a)") '-----------------END READING OF NAMELISTS------------------------' 
 	ENDIF
 
 	CALL MPI_BCAST(mass_file, 256, MPI_CHAR, root_process, comm, ierr)
@@ -445,7 +492,7 @@ PROGRAM FDPML
 	
 
 	
-	sigmamax = sigmamax*sqrt(w2(mode))/(LPML*(q(3)))
+	sigmamax = sigmamax*sqrt(w2(mode)) ! I used to divide by this->  Should I?  /(LPML*(q(3)))
 	
 		
 	IF (root_node) THEN
@@ -1202,8 +1249,10 @@ PROGRAM FDPML
 		WRITE (stdout, '(a, I10)') 		'!,LPML,', LPML
 		WRITE (stdout, '(a, E10.3)')	'!,sigmamax,', sigmamax
 		WRITE (stdout, '(a, E10.3)')	'!,w2,', w2(mode)
-		WRITE (stdout, '(a, E17.10)')	'!,T,', Transmission_coefficient
+		WRITE (stdout, '(a, E17.10)')	'!,Eleft,', Eleft
+		WRITE (stdout, '(a, E17.10)')	'!,Eright,', Eright
 		WRITE (stdout, '(a, E17.10)')	'!,Total_E,', (Eright + Eleft)
+		WRITE (stdout, '(a, E17.10)')	'!,T,', Transmission_coefficient
 		WRITE (stdout, '(a, E17.10)')	'!Escat', Escat
 		WRITE (stdout, '(a, F10.3)')	'!,Time,', Total_time/(world_size)
 		WRITE (stdout, '(a)') '============================================================='
