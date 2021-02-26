@@ -72,7 +72,7 @@ echo "Lpoint = " $L
 echo "spoint = " $s
 echo "qpoint = " $qp
 
-PMLL=5
+PMLL=50
 
 #
 # The MPI program to execute:
@@ -97,11 +97,11 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	mass_file = '${MASS}', 
 	flfrc1 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Si_q2.fc', 
 	flfrc2 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Ge_q2.fc'
-	mass_input = .false.
+	mass_input = .true.
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 16, 16, 60
+	PD(1) = 11, 11, 20
 	LPML = ${PMLL}
 	periodic = .true.
 	crystal_coordinates = .false.

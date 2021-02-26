@@ -228,7 +228,8 @@ MODULE preprocessing_module
 
 		IMPLICIT NONE
 		INCLUDE 'mpif.h' ! MPI header file
-		character(len = 256)			::	domain_file, mass_file
+		character(len = 256)			::	domain_file, mass_file, domain_prefix_id, mass_prefix_id, &
+											format_string
 		REAL							::	PD(3), TD(3)
 		INTEGER, AlLOCATABLE			::	my_ityp_PD(:,:,:,:), my_ityp_TD(:,:,:,:)
 		INTEGER							::	nr3, n1, n2, n3, natc, na, ntyp(2), my_n3, isub(4), &
@@ -263,152 +264,28 @@ MODULE preprocessing_module
 		
 		my_natoms = size(my_ityp_PD)
 		
-		CALL MPI_File_open(comm, domain_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
-		CALL MPI_Type_size(MPI_INT, type_size, ierr)
-		offset = (int(PD(1))*int(PD(2))*natc*PD3_start)*type_size
-		CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
-		CALL MPI_File_read_all(fh, my_ityp_PD, my_natoms, MPI_INT, status, ierr)
-		CALL MPI_GET_count(status, MPI_INT, counter, ierr)
-		CAlL MPI_File_close(fh, ierr)
-				
+		IF (my_id .lt. 10) then
+			format_string = "(a, a, I1, a)"
+		ELSEIF (my_id .lt. 100) THEN
+			format_string = "(a, a, I2, a)"
+		ELSE 
+			format_string = "(a, a, I3, a)"
+		ENDIF
+
+		write(domain_prefix_id, format_string) trim(domain_file), '_', my_id, '.dat'
+		write(mass_prefix_id, format_string) trim(mass_file), '_', my_id, '.dat'
+		
+		open (unit  = 1, file = domain_prefix_id, form = 'unformatted')
+		read (unit = 1) my_ityp_PD
+		close(unit = 1)
+		
 		IF (mass_input) THEN
-			CALL MPI_File_open(comm, mass_file, MPI_MODE_RDONLY, MPI_INFO_NULL, fh, ierr)
-			CALL MPI_TYPE_size(mp_real, type_size, ierr)
-			offset = (int(PD(1))*int(PD(2))*natc*PD3_start)*type_size
-			CALL MPI_File_seek(fh, offset, MPI_SEEK_SET, ierr)
-			CALL MPI_File_read_all(fh, my_amass_PD, size(my_amass_PD), mp_real, status, ierr)
-			CAlL MPI_File_close(fh, ierr)
-		END IF
-				
-		
-!		IF (io_node) THEN
-!			open (unit  = 1, file = domain_file, form = 'unformatted')
-!			read (unit = 1) ityp_PD
-!			close(unit = 1)
-!		ENDIF
-		
-		
-!		CALL MPI_BCAST(ityp_PD, size(ityp_PD), MPI_INT, root_process, comm, ierr)
-			
-!		IF (mass_input) THEN
-!			IF (io_node) THEN
-!				open (unit  = 1, file = mass_file, form = 'unformatted')
-!				read (unit = 1) amass_PD
-!				close(unit = 1)
-!			ENDIF
-!			CALL MPI_BCAST(amass_PD, size(amass_PD), mp_real, root_process, comm, ierr)	
-!		ENDIF
-
-		
-		
-		
-	!	----------------------------------------------------------------------------------------
-	!	Generating the Total Domain
-	!	This section adds a layer of PML of length LPML on the edges of the 
-	!	primary domain.
-	!	The Total domain defines the type of atom for every atom inside the simulation
-	!	cell
-	
-!		CALL MPI_ALLGATHER(my_natoms, 1, mp_int, recv_values, 1, mp_int, comm, ierr)
-!		CALL calculate_displs(recv_values, displs)
-!		CALL MPI_ALLGATHERV(my_ityp_PD, my_natoms, MPI_INT, ityp_PD, int(recv_values), int(displs), &
-!							MPI_INT, comm, ierr)
+			open (unit  = 1, file = mass_prefix_id, form = 'unformatted')
+			read (unit = 1) my_amass_PD
+			close(unit = 1)
+		ENDIF
 							
-!		if (mass_input) CALL MPI_ALLGATHERV(my_amass_PD, size(my_amass_PD), mp_real, amass_PD, int(recv_values), &
-!											int(displs), mp_real, comm, ierr)
-		
-!		ALLOCATE(ityp_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
-!		if (mass_input) ALLOCATE(amass_TD(int(TD(1)), int(TD(2)), int(TD(3)), natc))
-	
-!		IF (periodic) THEN
-!			DO n1 = 1, TD(1)
-!				DO n2 = 1, TD(2)
-!					DO n3 = 1, TD(3)
-!						DO na = 1, natc
-!							IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
-!								(n1.le.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
-!								(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
-!								(n2.le.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
-!								(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
-!								(n3.le.(TD(3)/2.D0+PD(3)/2.D0))) THEN
-!	!							If the atom is inside the Primary domain
-!								ityp_TD(n1,n2,n3,na)= ityp_PD(na, n1, n2, n3-LPML)
-!								IF (mass_input) THEN
-!									amass_TD(n1,n2,n3,na) = amass_PD(na, n1, n2, n3-LPML)
-!								ELSE
-!									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
-!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
-!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!									ENDIF
-!								ENDIF
-!							ELSEIF (n3.lt.TD(3)/2) THEN
-!								ityp_TD(n1,n2,n3,na) = 1
-!								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!							ELSEIF (n3.ge.TD(3)/2) THEN
-!								ityp_TD(n1,n2,n3,na) = 2
-!								amass_TD(n1,n2,n3,na) = amass2(itypc(na))
-!							ENDIF
-!						ENDDO
-!					ENDDO
-!				ENDDO
-!			ENDDO
-!		ELSE
-!			DO n1 = 1, TD(1)
-!				DO n2 = 1, TD(2)
-!					DO n3 = 1, TD(3)
-!						DO na = 1, natc
-!							IF ((n1.gt.(TD(1)/2.D0-PD(1)/2.D0)) .and. &
-!								(n1.lt.(TD(1)/2.D0+PD(1)/2.D0)) .and. &
-!								(n2.gt.(TD(2)/2.D0-PD(2)/2.D0)) .and. &
-!								(n2.lt.(TD(2)/2.D0+PD(2)/2.D0)) .and. &
-!								(n3.gt.(TD(3)/2.D0-PD(3)/2.D0)) .and. &
-!								(n3.lt.(TD(3)/2.D0+PD(3)/2.D0))) THEN
-!	!							If the atom is inside the Primary domain
-!								ityp_TD(n1,n2,n3,na)= &
-!									ityp_PD(na, n1-LPML, n2-LPML, n3-LPML)
-!								IF (mass_input) THEN
-!									amass_TD(n1,n2,n3,na) = amass_PD(na, n1-LPML,n2-LPML,&
-!																		n3-LPML)
-!								ELSE
-!									IF (ityp_TD(n1,n2,n3,na).eq.1) THEN
-!										amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!									ELSEIF (ityp_TD(n1,n2,n3,na).eq.2) THEN
-!										amass_TD(n1,n2,n3,na) = amass2(itypc(na))
-!									ENDIF
-!								ENDIF
-!							ELSE
-!								ityp_TD(n1,n2,n3,na) = 1
-!								amass_TD(n1,n2,n3,na) = amass1(itypc(na))
-!							ENDIF
-!						ENDDO
-!					ENDDO
-!				ENDDO
-!			ENDDO
-!		ENDIF
-		
-!		call print_domain(PD, TD, my_ityp_PD(1,:,:,:), ityp_TD(:,:,:,1))
-
-!		yplane = int(PD(2)/2.D0)
-
-!		WRITE (stdout, *) '--------------------------------------------------------'
-!		WRITE (stdout, *) 'Cross-sectional image of PD (check if this is correct)', my_id
-!		WRITE (stdout, *) '--------------------------------------------------------'
-!		DO n1 = 1, PD(1)
-!			DO n3 = 1, my_nr3
-!				IF (n3.eq.my_nr3) THEN
-!					write(stdout, fmt = '(I2)') my_ityp_PD(1, n1,yplane,n3)
-!				ELSE
-!					write(stdout, fmt = '(I2)', advance = 'no') &
-!											my_ityp_PD(1, n1,yplane,n3)
-!				ENDIF
-!			ENDDO
-!		ENDDO
-		
-!		CALL MPI_WIN_CREATE(my_ityp_PD, sizeof(my_ityp_PD), sizeof(my_ityp_PD)/size(my_ityp_PD), &
-!							MPI_INFO_NULL, comm, win, ierr)
-							
-		WRITE(stdout, "(a,i5)") 'TD(3)=',int(TD(3))
+		IF (io_node) WRITE(stdout, "(a,i5)") 'TD(3)=',int(TD(3))
 		CALL get_nr3(int(TD(3)), my_TD3, TD3_start)
 				
 		CALL MPI_ALLGATHER(PD3_start, 1, MPI_INT, everyones_PD3_start, 1, MPI_INT, comm, ierr)

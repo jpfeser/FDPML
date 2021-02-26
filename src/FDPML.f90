@@ -280,7 +280,7 @@ PROGRAM FDPML
 			WRITE (stdout, "(a, L1)") 'plotting K (RHS of equation)? ', plot_K
 			WRITE (stdout, "(a, L1)") 'plotting sigma? ', plot_sig
 			WRITE (stdout, "(a, L1)") 'plotting uscat? ', plot_uinc
-			WRITE (stdout, "(a, a)") 'plotting mode? ',  plottingmode
+			WRITE (stdout, "(a, I1)") 'plotting mode? ',  plottingmode
 		READ(stdin, calibrate)
 			WRITE (stdout, "(a)") '------ calibrate (calibration of PML parameters)------'
 			WRITE (stdout, "(a, L1)") 'Is this a calibration run, where the the q, sigma, LPML will be read from a file? ', file_input
@@ -1153,12 +1153,12 @@ PROGRAM FDPML
 			i3 = atom_tuple(4) - TD3_start
 			ityp = my_ityp_TD(ia, i1, i2, i3)
 			na = na_vec(ia)
-			IF (i3.lt.(TD(3)/2.D0)) THEN
+			IF (i3 + TD3_start.lt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
 					my_Eleft= my_Eleft + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
-			ELSEIF (i3.gt.(TD(3)/2.D0)) THEN
+			ELSEIF (i3 + TD3_start.gt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
 					my_Eright= my_Eright + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2

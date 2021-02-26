@@ -112,10 +112,10 @@ MODULE matgen_module
 			ia = atom_tuple(1) 
 			i1 = atom_tuple(2)
 			i2 = atom_tuple(3)
-			i3 = atom_tuple(4) 
+			i3 = atom_tuple(4) - TD3_start
 			
-			ityp = my_ityp_TD(ia, i1, i2, i3 - TD3_start)
-			r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3 -1)*atc(:,3) + tauc(:,ia)
+			ityp = my_ityp_TD(ia, i1, i2, i3)
+			r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + (i3 + TD3_start -1)*atc(:,3) + tauc(:,ia)
 			IF (r(1).lt.((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0)) THEN
 		        sig(p,1)= abs(r(1)-((TD(1)-1.D0)/2.D0-(PD(1)-1.D0)/2.D0))**2
 			ELSEIF (r(1).gt.((TD(1)-1.D0)/2.D0+(PD(1)-1.D0)/2.D0)) THEN
