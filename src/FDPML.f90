@@ -416,6 +416,8 @@ PROGRAM FDPML
 				 epsil(:,:,2), nat(2), ibrav(2), alat2, at2, ntyp(2), &
 				 amass2, omega2, has_zstar(2) )
 				 
+	IF (io_node) WRITE(stdout,"(a,i3)") 'Accoring to 2nd FC file, nr3 = ', nr3
+				 
 	na_ifc = has_zstar(1)
 	fd = na_ifc 
 
@@ -598,13 +600,13 @@ PROGRAM FDPML
 	counter1 = 0	!	counter for ilist, jlist and Alist
 	counter2 = 0	!	counter for atoms connected ouside the domain
 !	CALL cpu_time(start)
-	DO p = 1, my_natoms
-		n = p + atoms_start(my_id+1)
-		atom_tuple = ind2sub(n, nSub)
-		ia = atom_tuple(1)
-		i1 = atom_tuple(2)
-		i2 = atom_tuple(3)
-		i3 = atom_tuple(4) - TD3_start
+	DO p = 1, my_natoms ! local atom numbering
+		n = p + atoms_start(my_id+1) ! global atom numbering
+		atom_tuple = ind2sub(n, nSub) ! determine global coordinates
+		ia = atom_tuple(1) ! atom in unit cell?
+		i1 = atom_tuple(2) ! global x
+		i2 = atom_tuple(3) ! global y
+		i3 = atom_tuple(4) - TD3_start ! LOCAL z
 		ityp = my_ityp_TD(ia, i1, i2, i3)
 		na = na_vec(ia)
 		IF (ityp.eq.1) THEN

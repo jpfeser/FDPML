@@ -33,13 +33,13 @@
 # tells cluster to allocate 1GB memory PER processor
 #$ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
-#$ -l exclusive=1
+# $ -l exclusive=1
 # send script to the standby queue
-# $ -l standby=1,h_rt=4:00:00
+#$ -l standby=1,h_rt=0:15:00
 # setup messaging about (b)egin, (e)nd, (a)bort, and (s) of your program
-# $ -m beas
+#$ -m beas
 # send messages to this email address
-# -M 9735252392@vtext.com
+#$ -M 9735252392@vtext.com
 #----------------------------------
 
 #      Load any packages you need to run it
@@ -72,7 +72,7 @@ echo "Lpoint = " $L
 echo "spoint = " $s
 echo "qpoint = " $qp
 
-PMLL=50
+PMLL=5
 
 #
 # The MPI program to execute:
@@ -96,17 +96,17 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
 	flfrc1 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Si_q2.fc', 
-	flfrc2 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Ge_q2.fc'
+	flfrc2 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Si_q2.fc'
 	mass_input = .true.
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 11, 11, 20
-	LPML = ${PMLL}
+	PD(1) = 32, 32, 128
+	LPML = 20
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'full'
+	wavetype = 'half'
 	q(1) = 0.0, 0.0, 0.4
 	mode = 3
 	sigmamax = 1
@@ -124,7 +124,7 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	tmp_dir='${TMP_DIR}' 
 /
   &postprocessing
-	calc_TC = .false.
+	calc_TC = .true.
 	scattered_energy= .true.
 	scattering_Xsec = .true.
 /
