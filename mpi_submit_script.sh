@@ -33,9 +33,9 @@
 # tells cluster to allocate 1GB memory PER processor
 #$ -l m_mem_free=3G
 # tells cluster to give you exclusive access to node
-# $ -l exclusive=1
+#$ -l exclusive=1
 # send script to the standby queue
-#$ -l standby=1,h_rt=0:15:00
+# $ -l standby=1,h_rt=0:15:00
 # setup messaging about (b)egin, (e)nd, (a)bort, and (s) of your program
 #$ -m beas
 # send messages to this email address

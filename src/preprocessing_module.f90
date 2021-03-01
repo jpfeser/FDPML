@@ -329,9 +329,10 @@ MODULE preprocessing_module
 								my_amass_TD(na, n1, n2, my_n3) = amass1(itypc(na))
 							END DO
 						ELSEIF (n3.ge.TD(3)/2) THEN
-							my_ityp_TD(:, n1, n2, my_n3) = 2
+						! Temporary fix: set to 1 if you want right PML to be same as left or 2 if you want to be different
+							my_ityp_TD(:, n1, n2, my_n3) = 1
 							DO na = 1, natc
-								my_amass_TD(na, n1, n2, my_n3) = amass2(itypc(na))
+								my_amass_TD(na, n1, n2, my_n3) = amass1(itypc(na))
 							END DO
 						ENDIF
 					ENDDO

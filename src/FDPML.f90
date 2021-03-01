@@ -534,8 +534,8 @@ PROGRAM FDPML
 
 !	=========================================================================================
 	
-	call get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
-						atoms_start, everyones_rows, TD, natc)
+	call get_nrows(natoms, my_natoms, my_nrows, nrows, everyones_atoms, &
+						atoms_start, everyones_rows, TD, natc, my_TD3)
 						
 
 !	=========================================================================================
