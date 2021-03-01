@@ -107,7 +107,7 @@ CONTAINS
 	END SUBROUTINE
 
 	SUBROUTINE calculate_displs(counts, displs)
-		INTEGER(KIND = RP), DIMENSION(world_size) :: counts, displs
+		INTEGER(KIND = IP), DIMENSION(world_size) :: counts, displs
 		INTEGER :: i
 		displs(1)=0
 		DO i=2,world_size
@@ -133,8 +133,8 @@ CONTAINS
 		
 	END SUBROUTINE
 	
-	SUBROUTINE get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
-						atoms_start, everyones_rows, TD, natc, ityp_TD)
+	SUBROUTINE get_nrows(natoms, my_natoms, my_nrows, nrows, everyones_atoms, &
+						atoms_start, everyones_rows, TD, natc, my_TD3)
 						
 !	Calculate the number of atoms(rows) assigned to every processor
 !	Nomenclature :
@@ -145,33 +145,37 @@ CONTAINS
 !		atoms for every processor
 !		atoms_start(n) defines the starting atom of nth processor 
 
+		
+		
+
 		USE kinds 
 		use, intrinsic 				:: 	iso_fortran_env, only : stdin=>input_unit, &
 												  stdout=>output_unit, &
 												  stderr=>error_unit
 		IMPLICIT NONE
-		INTEGER(KIND = IP) 					:: 	natoms, my_natoms, rem, my_nrows, &
-												nrows
-		INTEGER(KIND = IP)				 	:: 	everyones_atoms(world_size), &
-												atoms_start(world_size), &
-												everyones_rows(world_size)
-		INTEGER								::	natc, i
-		REAL								::	TD(3)
-		INTEGER								::	ityp_TD(int(TD(1)),int(TD(2)),int(TD(3)),natc)
+		! Inputs
+		INTEGER, INTENT(IN)		:: 	natc, my_TD3
+		REAL, INTENT(IN)					::	TD(3)
+		INTEGER(KIND = IP), INTENT(OUT)		::	natoms, my_natoms, my_nrows, nrows, &
+													everyones_atoms(world_size), &
+													atoms_start(world_size), &
+													everyones_rows(world_size)
+												
+		INTEGER								::	i
 		
-		
-		natoms = size(ityp_TD)
+		natoms = int(TD(1))*int(TD(2))*int(TD(3))*natc
 		nrows = 3*natoms
 		if (io_node) WRITE (stdout, '(a, I11)')' Total number of atoms inside simulation cell =',&
 										natoms
 		IF (io_node) WRITE (stdout, '(a)') '	'
 		
-		my_natoms = natoms/world_size
-		rem = MOD(natoms,world_size)
+!!		my_natoms = natoms/world_size
+!!		rem = MOD(natoms,world_size)
 		
-		IF (my_id.gt.(world_size-rem-1)) THEN
-			my_natoms = my_natoms+1
-		ENDIF
+!!		IF (my_id.gt.(world_size-rem-1)) THEN
+!!			my_natoms = my_natoms+1
+!!		ENDIF
+		my_natoms = int(TD(1))*int(TD(2))*my_TD3*natc
 		
 		CALL MPI_ALLGATHER(my_natoms, 1, mp_int, everyones_atoms, 1, mp_int, comm, ierr)
 		

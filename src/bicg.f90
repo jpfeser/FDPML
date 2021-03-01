@@ -282,6 +282,8 @@ MODULE bicg
 		
 		my_rt= my_r ! shadow residual
 		resvec(1)= normr
+		
+		WRITE(stdout, '(a, I6, a, E10.3)') 'Iter #', 0, ' relres = ', normr/tolb
 
 
 		DO ii=1,maxit

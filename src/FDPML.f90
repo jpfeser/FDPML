@@ -67,7 +67,7 @@ PROGRAM FDPML
 	use, intrinsic :: iso_fortran_env, only : stdin=>input_unit, &
 											  stdout=>output_unit, &
 											  stderr=>error_unit
-	USE constants, ONLY : tpi, amu_ry, RY_TO_CMM1, RY_TO_THZ, BOHR_RADIUS_SI
+	USE constants, ONLY : tpi, amu_ry, RY_TO_CMM1, RY_TO_THZ, BOHR_RADIUS_SI, GB_byte
 											  
 	IMPLICIT NONE
 	INCLUDE 'mpif.h' ! MPI header file
@@ -129,8 +129,8 @@ PROGRAM FDPML
 	REAL 							:: 	PD(3), TD(3), center(3), atc(3,3) 
 	REAL(KIND = RP), ALLOCATABLE 	:: 	tauc(:,:)
 	INTEGER, ALLOCATABLE 			:: 	itypc(:)
-	INTEGER, ALLOCATABLE 			:: 	ityp_PD(:,:,:,:), ityp_TD(:,:,:,:)
-	REAL(KIND = RP), ALLOCATABLE 	:: 	amass_PD(:,:,:,:), amass_TD(:,:,:,:)
+	INTEGER, ALLOCATABLE 			:: 	ityp_PD(:,:,:,:), ityp_TD(:,:,:,:), my_ityp_TD(:,:,:,:)
+	REAL(KIND = RP), ALLOCATABLE 	:: 	amass_PD(:,:,:,:), amass_TD(:,:,:,:), my_amass_TD(:,:,:,:)
 	INTEGER 						:: 	n1, n2, n3, na, i, j, i1, i2, i3, &
 										nb, ia, ib, ipol, jpol ! counters
 	INTEGER 						:: 	LPML, natoms_PML
@@ -145,7 +145,7 @@ PROGRAM FDPML
 	COMPLEX(KIND = CP), ALLOCATABLE :: 	Alist(:)
 	REAL(KIND = RP), ALLOCATABLE	::	sig(:,:)
 	REAL(KIND=RP) 					:: 	rws(0:3,nrwsx), atws(3,3)
-	INTEGER 						:: 	nrws
+	INTEGER 						:: 	nrws, my_TD3, TD3_start
 	REAL 							:: 	start, finish
 !	*****************************************************************************************
 !	Local variables
@@ -200,12 +200,13 @@ PROGRAM FDPML
 !										my_postprocessing_time
 	INTEGER(KIND = IP)				:: 	my_BW
 	INTEGER							:: 	final_iter
-	LOGICAL							::	scattering_Xsec
+	LOGICAL							::	scattering_Xsec, expense_estimate
 	CHARACTER(len = 256) 			::	q_file
 	LOGICAL							::	q_from_file
 	REAL(KIND = RP), ALLOCATABLE	::	w2list(:,:), qlist_from_file(:,:)
 	COMPLEX(KIND = CP), ALLOCATABLE	::	zclist(:,:)
 	REAL(KIND =RP)					::	Xsec, Jinc, V
+	INTEGER							::	mem_ityp_TD, mem_ityp_PD, mem_amass_PD, mem_amass_TD
 	
 	CALL mp_init( )
 	
@@ -220,7 +221,7 @@ PROGRAM FDPML
 
 	NAMELIST /filenames/ mass_file, domain_file, flfrc1, flfrc2, mass_input &
 			 /system/ simulation_type, PD, LPML, periodic, crystal_coordinates, &
-					  asr, wavetype, q, mode, sigmamax &
+					  asr, wavetype, q, mode, sigmamax, expense_estimate &
 			 /qlists/ q_from_file, q_file &
 			 /solver/ tol, maxit &
 			 /restartoptions/ restart, iterpause, tmp_dir, &
@@ -232,18 +233,65 @@ PROGRAM FDPML
 	Call set_defaults(mass_input, crystal_coordinates, asr, qpoint, &
 						file_input, qlist_file, slist_file, Llist_file, &
 						Lpoint, spoint, tol, maxit, restart, iterpause, calc_TC, &
-						scattered_energy, scattering_Xsec, plot_K, plot_sig, plot_uinc, plot_uscat, q_from_file, &
-						q_file)
+						scattered_energy, scattering_Xsec, plot_K, plot_sig, plot_uinc, &
+						plot_uscat, q_from_file, q_file, expense_estimate)
 	
 	IF (root_node) THEN
+		WRITE(stdout, "(a)") '-----------------BEGIN READING OF NAMELISTS------------------------' 
 		READ(stdin, filenames)
+			WRITE (stdout, "(a)") '------ filenames NAMELIST ------'
+			WRITE (stdout, "(a, a)") 'Reading mass file from ', domain_file
+			WRITE (stdout, "(a, a)") 'Reading 1st FC file from ', flfrc1
+			WRITE (stdout, "(a, a)") 'Reading 2nd FC file from ', flfrc2
+			WRITE (stdout, "(a, L1)") 'Am I reading a mass_input file? ', mass_input
+			WRITE (stdout, "(a, a)") 'If so, reading mass file from ', mass_file
 		READ(stdin, system)
+			WRITE (stdout, "(a)") '------ system  ------'
+			WRITE (stdout, "(a, a)") 'What type of simulation is it? ', simulation_type
+			WRITE (stdout, "(a, L1)") 'Is the domain periodic? ', periodic 
+			WRITE (stdout, "(a, L1)") 'Are we workding in crystal coordinates?', crystal_coordinates
+			WRITE (stdout, "(a, i, a, i, a, i)") 'The primary domain has dimensions: ', int(PD(1)), ' x ', int(PD(2)), 'x', int(PD(3))
+			WRITE (stdout, "(a, i5)") 'We will be using PMLs with dimension (in unit cells) of:  ', LPML
+			WRITE (stdout, "(a, F10.3)") 'Using a parabolically graded pml with sigmamax/omega = ',sigmamax 
+			WRITE (stdout, "(a, a)") 'The incident wave will be generated as (half or full):  ', wavetype
+			WRITE (stdout, "(a,F10.3,a,F10.3,a,F10.3,a,i3)") 'specifically we are simulating q=(', q(1), ', ', q(2), ', ', q(3),') mode #', mode
+			WRITE (stdout, "(a, L1)") 'Is this only an expense estimate run (memory calculation)? ', expense_estimate
+			WRITE (stdout, "(a, a)") 'What type of acoustic sum rule (asr) are we implimenting? ', asr 
 		READ(stdin, qlists)
+			WRITE (stdout, "(a)") '------ qlists ------'
+			WRITE (stdout, "(a, L1)") 'Are we reading a qlist from file?', q_from_file
+			WRITE (stdout, "(a, a)") 'Q: If so, where is it?  A:', q_file
 		READ(stdin, solver)
+			WRITE (stdout, "(a)") '------ solver ------'
+			WRITE (stdout, "(a, E10.3)") 'what is the tolerance?',tol
+			WRITE (stdout, "(a, i)") 'how many iterations for the biconjugate gradient solver? A: ',maxit
 		READ(stdin, restartoptions)
+			WRITE (stdout, "(a)") '------ restartoptions ------'
+			WRITE (stdout, "(a, L1)") 'Are we restarting from a saved point?', restart
+			WRITE (stdout, "(a,a)") 'Where are we storing the .save files? ', tmp_dir
+			WRITE (stdout, "(a,i)") 'How often should .save files be created (# of iter)? ', iterpause
 		READ(stdin, postprocessing)
+			WRITE (stdout, "(a)") '------ postprocessing ------'
+			WRITE (stdout, "(a, L1)") 'Calculating transmission coefficient? ', calc_TC
+			WRITE (stdout, "(a, L1)") 'Calculating scattered energy? ', scattered_energy
+			WRITE (stdout, "(a, L1)") 'Calculating scattering cross-section? ', scattering_Xsec
 		READ(stdin, plots)
+			WRITE (stdout, "(a)") '------ plotting ------'
+			WRITE (stdout, "(a, L1)") 'plotting K (RHS of equation)? ', plot_K
+			WRITE (stdout, "(a, L1)") 'plotting sigma? ', plot_sig
+			WRITE (stdout, "(a, L1)") 'plotting uscat? ', plot_uinc
+			WRITE (stdout, "(a, I1)") 'plotting mode? ',  plottingmode
 		READ(stdin, calibrate)
+			WRITE (stdout, "(a)") '------ calibrate (calibration of PML parameters)------'
+			WRITE (stdout, "(a, L1)") 'Is this a calibration run, where the the q, sigma, LPML will be read from a file? ', file_input
+			WRITE (stdout, "(a)") 'If so....'
+			WRITE (stdout, "(a, a)") 'where is the list of q found?', qlist_file
+			WRITE (stdout, "(a, i5)") 'of which were reading row #', qpoint 
+			WRITE (stdout, "(a, a)") 'where is the list of sigma found? ', slist_file
+			WRITE (stdout, "(a, i5)") 'of which were reading row #', spoint 
+			WRITE (stdout, "(a, a)") 'where is the list of LPML found? ', Llist_file
+			WRITE (stdout, "(a, i5)") 'of which were reading row #', Lpoint 
+		WRITE(stdout, "(a)") '-----------------END READING OF NAMELISTS------------------------' 
 	ENDIF
 
 	CALL MPI_BCAST(mass_file, 256, MPI_CHAR, root_process, comm, ierr)
@@ -277,6 +325,7 @@ PROGRAM FDPML
 	CALL MPI_BCAST(iterpause, 1, MPI_INT, root_process, comm, ierr)
 	CALL MPI_BCAST(tmp_dir, 256, MPI_CHAR, root_process, comm, ierr)
 	CALL MPI_BCAST(scattering_Xsec, 1, mp_logical, root_process, comm, ierr)
+	CALL MPI_BCAST(expense_estimate, 1, mp_logical, root_process, comm, ierr)
 	
 	
 	IF (my_id .lt. 10) then
@@ -343,6 +392,7 @@ PROGRAM FDPML
 			ENDDO
 		ENDIF
 	ENDIF	
+	
 !!	----------------------------------------------------------------------------------------
 	
 	CALL MPI_BCAST(LPML, 1, MPI_INT, root_process, comm, ierr)
@@ -365,6 +415,8 @@ PROGRAM FDPML
 	CALL readfc( flfrc2, frc2, tau2, zeu2, m_loc, ityp2, nr1, nr2, nr3, &
 				 epsil(:,:,2), nat(2), ibrav(2), alat2, at2, ntyp(2), &
 				 amass2, omega2, has_zstar(2) )
+				 
+	IF (io_node) WRITE(stdout,"(a,i3)") 'Accoring to 2nd FC file, nr3 = ', nr3
 				 
 	na_ifc = has_zstar(1)
 	fd = na_ifc 
@@ -415,6 +467,7 @@ PROGRAM FDPML
 	ALLOCATE(ib_vec2(nat(2), -2*nr1:2*nr1, -2*nr2:2*nr2, -2*nr3:2*nr3, natc))
 	ALLOCATE(zclist(3*natc, nq))
 	
+	
 	DO qpoint = 1, nq
 		q(:) = qlist(:,qpoint)
 		! get_disp: see preprocessing_module.f90
@@ -429,6 +482,8 @@ PROGRAM FDPML
 	!	supercell. However the Volume(Supercell) = n*Volume(primitive cell)
 	!	where n is an integer
 	
+
+	
 		call get_supercell(at1, tau1, ityp1, nat, z(:,mode), r_cell, na_vec, ib_vec1, &
 									ib_vec2, natc, tauc, itypc, atc, zc, crystal_coordinates, &
 									nr1, nr2, nr3)
@@ -437,7 +492,22 @@ PROGRAM FDPML
 	
 	ENDDO
 	
-	sigmamax = sigmamax*sqrt(w2(mode))/(LPML*(q(3)))
+
+	
+	sigmamax = sigmamax*sqrt(w2(mode)) ! I used to divide by this->  Should I?  /(LPML*(q(3)))
+	
+		
+	IF (root_node) THEN
+		WRITE (stdout, '(a)') '=================Conventional Units=========================='
+		WRITE (stdout, '(a1, a18, F10.3, a, F10.3, a, F10.3)') 	'!',',vg (m/s),', vg(1)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, &
+															',', vg(2)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, & 
+															',', vg(3)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',lambda_inc (nm),', alat1/norm2(q)*BOHR_RADIUS_SI*1d9
+		WRITE (stdout, '(a1, a18, F10.3)') 	'!',',LPML (nm),', LPML*alat1*BOHR_RADIUS_SI*1d9
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',sigmamax (THz),', sigmamax*RY_TO_THZ
+		WRITE (stdout, '(a1, a18, F10.3)')	'!',',w (THz),', sqrt(w2(mode))*RY_TO_THZ
+		WRITE (stdout, '(a)') '============================================================='
+	ENDIF
 
 !	========================================================================================
 !	Generating the primary and total domain.
@@ -448,8 +518,9 @@ PROGRAM FDPML
 !
 !	Loading the primary domain
 
-	call gen_TD(domain_file, mass_file, amass_TD, ityp_TD, PD, TD, periodic, ntyp, &
-						amass1, amass2, natc, itypc, mass_input, LPML)
+	call gen_TD(domain_file, mass_file, my_amass_TD, my_ityp_TD, PD, TD, periodic, ntyp, &
+						amass1, amass2, natc, itypc, mass_input, LPML, nr3, my_TD3, TD3_start)
+
 						
 !**	
 	CALL cpu_time(finish)
@@ -463,8 +534,9 @@ PROGRAM FDPML
 
 !	=========================================================================================
 	
-	call get_nrows(natoms, my_natoms, rem, my_nrows, nrows, everyones_atoms, &
-						atoms_start, everyones_rows, TD, natc, ityp_TD)
+	call get_nrows(natoms, my_natoms, my_nrows, nrows, everyones_atoms, &
+						atoms_start, everyones_rows, TD, natc, my_TD3)
+						
 
 !	=========================================================================================
 !	Generate Incident wave
@@ -478,15 +550,9 @@ PROGRAM FDPML
 !	Generating the damping coefficients
 
 	CALL gen_sig(sig, my_natoms, sigmamax, LPML, periodic, atc, atom_tuple, &
-						TD, PD, atoms_start, ityp_TD, tauc, natc)
+						TD, PD, atoms_start, my_ityp_TD, tauc, natc, my_TD3, nr3, TD3_start)
 
 !	=======================================================================================
-
-!	Set up A-matrix
-
-	IF (io_node) write (stdout, *) '	'
-	IF (io_node) write (stdout, *) '-----------------------------------------------------------------------'
-	IF (io_node) write (stdout, *) 'Setting up A matrix'
 
 
 !	----------------------------------------------------------------------------------------
@@ -528,18 +594,20 @@ PROGRAM FDPML
 	CALL MPI_BCAST(wscache, ((4*nr1+1)*(4*nr2+1)*(4*nr3+1)*nat(1)*nat(2)), mp_real, root_process, comm, ierr)
 !	----------------------------------------------------------------------------------------
 
+
+
 !	Counter loop to find how much memory is needed for Alist, ilist and jlist
 	counter1 = 0	!	counter for ilist, jlist and Alist
 	counter2 = 0	!	counter for atoms connected ouside the domain
 !	CALL cpu_time(start)
-	DO p = 1, my_natoms
-		n = p + atoms_start(my_id+1)
-		atom_tuple = ind2sub(n, nSub)
-		ia = atom_tuple(1)
-		i1 = atom_tuple(2)
-		i2 = atom_tuple(3)
-		i3 = atom_tuple(4)
-		ityp = ityp_TD(i1,i2,i3,ia)
+	DO p = 1, my_natoms ! local atom numbering
+		n = p + atoms_start(my_id+1) ! global atom numbering
+		atom_tuple = ind2sub(n, nSub) ! determine global coordinates
+		ia = atom_tuple(1) ! atom in unit cell?
+		i1 = atom_tuple(2) ! global x
+		i2 = atom_tuple(3) ! global y
+		i3 = atom_tuple(4) - TD3_start ! LOCAL z
+		ityp = my_ityp_TD(ia, i1, i2, i3)
 		na = na_vec(ia)
 		IF (ityp.eq.1) THEN
 			DO n1 = -2*nr1,2*nr1
@@ -557,7 +625,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start - 1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at1(:,1) + n2*at1(:,2) + &
 									n3*at1(:,3)+ tau1(:,nb)
 								r = floor(r)
@@ -619,7 +687,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start - 1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at2(:,1) + n2*at2(:,2) + &
 									n3*at2(:,3)+ tau2(:,nb)
 								r = floor(r)
@@ -665,6 +733,7 @@ PROGRAM FDPML
 		ENDIF	
 	ENDDO
 	
+	
 !	sig_atoms accounts for the total number of nnz needed for adding the sigma elements 
 !	to Amat
 	
@@ -693,13 +762,47 @@ PROGRAM FDPML
 !	----------------------------------------------------------------------------------------
 
 	my_nnz = counter1+my_nrows
+	
+	
+!	memory = memory(ilist) + memory(jlist) + memory(Alist) + memory(uinc) + memory(uscat) +&
+!			memory(ityp_PD) + memory(ityp_PD) + memory(amass_PD) + memory(amass_TD) + memory(sig) + &
+!			memory(my_K) + memory(borderlogic)
+
+	mem_ityp_PD = sizeof(ityp_PD)
+	mem_ityp_TD = sizeof(ityp_TD)
+	mem_amass_PD = sizeof(amass_PD)
+	mem_amass_TD = sizeof(my_amass_TD)
+	CALL print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, mem_ityp_TD, &
+								mem_amass_TD, mem_amass_PD)
+
+	CALL MPI_BARRIER(comm, ierr)
+	
+	
+	IF (expense_estimate) THEN
+		CALL mp_finalize( )
+		if (io_node) WRITE (stdout, '(a)') 'Ending memory calculation run'
+		STOP
+	ENDIF
+	
+!	Set up A-matrix
+
+	IF (io_node) write (stdout, *) '	'
+	IF (io_node) write (stdout, *) '-----------------------------------------------------------------------'
+	IF (io_node) write (stdout, *) 'Setting up A matrix'
+
+
+	
 	ALLOCATE(	ilist(counter1+my_nrows), jlist(counter1+my_nrows), &
-				Alist(counter1+my_nrows)	) ! my_nrows accounts for -m*w**2 
+				Alist(counter1+my_nrows), stat = ierr	) ! my_nrows accounts for -m*w**2 
 											  ! subtraction from every row of A-mat
 											  ! Amat = -(m*w**2+K) equn A3 on 
 											  !	PHYSICAL REVIEW B 95, 125434 (2017)
 
-	WRITE (stdout, '(a, I)') 'nnz = ', counter1+my_nrows
+
+	IF (ierr.ne.0) THEN
+		WRITE (stdout, '(a)') 'ERROR ALLOCATING MEMORY'
+	ENDIF 
+
 
 	ALLOCATE(borderlogic(counter2))		  ! Defines every atom connected outside
 											  ! TD
@@ -715,8 +818,8 @@ PROGRAM FDPML
 		ia = atom_tuple(1)
 		i1 = atom_tuple(2)
 		i2 = atom_tuple(3)
-		i3 = atom_tuple(4)
-		ityp = ityp_TD(i1,i2,i3,ia)
+		i3 = atom_tuple(4) - TD3_start
+		ityp = my_ityp_TD(ia, i1, i2, i3)
 		na = na_vec(ia)
 		IF (ityp.eq.1) THEN
 			DO n1 = -2*nr1,2*nr1
@@ -732,7 +835,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start -1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at1(:,1) + n2*at1(:,2) + &
 									n3*at1(:,3)+ tau1(:,nb)
 								r = floor(r)
@@ -768,9 +871,9 @@ PROGRAM FDPML
 								Location = sub2ind(iSub, nSub) ! transform 3-D space 
 															   ! to 1-D
 
-								mass1 = amass_TD(i1,i2,i3,ia)
-								mass2 = amass_TD(int(r(1))+1,int(r(2))+1,&
-												 int(r(3))+1,ib)
+								mass1 = my_amass_TD(ia, i1, i2, i3)
+								mass2 = my_amass_TD(ib, int(r(1))+1,int(r(2))+1,&
+												 int(r(3))+1 - TD3_start)
 !								mass1 = amass1(ityp2(na))
 !								IF (ityp_TD(int(r(1))+1, int(r(2))+1, &
 !											int(r(3))+1, ib).eq.2) THEN
@@ -794,6 +897,7 @@ PROGRAM FDPML
 										IF ((sqrt(mass1*mass2).eq.0.D0) .or. &
 											(w2(mode).eq.0.D0)) THEN
 											print *, 'HELLO'
+											EXIT
 										ENDIF
 									ENDDO
 								ENDDO
@@ -817,7 +921,7 @@ PROGRAM FDPML
 								m3 = MOD(n3+1,nr3)
 								IF(m3.LE.0) m3=m3+nr3
 								r = (i1-1)*atc(:,1) + (i2-1)*atc(:,2) + &
-									(i3-1)*atc(:,3)
+									(i3 + TD3_start -1)*atc(:,3)
 								r = r + r_cell(:,ia) + n1*at2(:,1) + n2*at2(:,2) + &
 									n3*at2(:,3)+ tau2(:,nb)
 								r = floor(r)
@@ -844,9 +948,9 @@ PROGRAM FDPML
 								isub = (/ ib, int(r(1))+1, int(r(2))+1, &
 											int(r(3))+1 /)
 								Location = sub2ind(iSub, nSub)
-								mass1 = amass_TD(i1,i2,i3,ia)
-								mass2 = amass_TD(int(r(1))+1,int(r(2))+1,&
-												 int(r(3))+1,ib)
+								mass1 = my_amass_TD(ia, i1, i2, i3)
+								mass2 = my_amass_TD(ib, int(r(1))+1,int(r(2))+1,&
+												 int(r(3))+1 - TD3_start)
 !								mass1 = amass2(ityp2(na))
 !								IF (ityp_TD(int(r(1))+1, int(r(2))+1, &
 !											int(r(3))+1, ib).eq.2) THEN
@@ -871,6 +975,7 @@ PROGRAM FDPML
 										IF ((sqrt(mass1*mass2).eq.0.D0) .or. &
 											(w2(mode).eq.0.D0)) THEN
 											print *, 'HELLO'
+											EXIT
 										ENDIF
 									ENDDO
 								ENDDO
@@ -881,7 +986,6 @@ PROGRAM FDPML
 			ENDDO
 		ENDIF	
 	ENDDO
-	
 	
 !	CALL MPI_REDUCE(my_BW, BW, 1, mp_int, mp_maxi, root_node, comm, ierr)
 	
@@ -923,6 +1027,8 @@ PROGRAM FDPML
 	DO i = 1, counter2
 		my_K(borderlogic(i)) = CMPLX(0.0, 0.0, KIND = CP)
 	ENDDO
+	
+
 !	==========================================================================================
 
 !	******************************************************************************************
@@ -947,6 +1053,8 @@ PROGRAM FDPML
 	CALL cpu_time(finish)
 	
 	matrix_time = finish - start
+	
+
 	
 !	OPEN (unit = 666, file = 'Alist.txt', form = 'formatted')
 	
@@ -989,6 +1097,11 @@ PROGRAM FDPML
 	CALL mpibicgstabcoo (	Alist, ilist, jlist, my_uscat, my_K, my_nnz, &
 						my_nrows, nrows, everyones_rows, tol, maxit, resvec, flag, &
 						iterpause, restartfile	)
+						
+	CALL MPI_BARRIER(comm, ierr)
+	OPEN(unit = 639, file = restartfile, form = 'unformatted')
+	WRITE(639) my_uscat
+	CLOSE(unit = 639)
 	
 	finish_mkl = dsecnd()
 !**				
@@ -1039,15 +1152,15 @@ PROGRAM FDPML
 			ia = atom_tuple(1)
 			i1 = atom_tuple(2)
 			i2 = atom_tuple(3)
-			i3 = atom_tuple(4)
-			ityp = ityp_TD(i1,i2,i3,ia)
+			i3 = atom_tuple(4) - TD3_start
+			ityp = my_ityp_TD(ia, i1, i2, i3)
 			na = na_vec(ia)
-			IF (i3.lt.(TD(3)/2.D0)) THEN
+			IF (i3 + TD3_start.lt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
 					my_Eleft= my_Eleft + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2
 				ENDDO
-			ELSEIF (i3.gt.(TD(3)/2.D0)) THEN
+			ELSEIF (i3 + TD3_start.gt.(TD(3)/2.D0)) THEN
 				DO ipol = 1,3
 					my_Eright= my_Eright + abs(sig(p,ipol))* &
 									abs(my_uscat(3*p-(3-ipol)))**2
@@ -1077,8 +1190,8 @@ PROGRAM FDPML
 			ia = atom_tuple(1)
 			i1 = atom_tuple(2)
 			i2 = atom_tuple(3)
-			i3 = atom_tuple(4)
-			ityp = ityp_TD(i1,i2,i3,ia)
+			i3 = atom_tuple(4) - TD3_start
+			ityp = my_ityp_TD(ia, i1, i2, i3)
 			na = na_vec(ia)
 			IF (ityp.eq.1) THEN
 				DO ipol = 1,3
@@ -1138,24 +1251,15 @@ PROGRAM FDPML
 		WRITE (stdout, '(a, I10)') 		'!,LPML,', LPML
 		WRITE (stdout, '(a, E10.3)')	'!,sigmamax,', sigmamax
 		WRITE (stdout, '(a, E10.3)')	'!,w2,', w2(mode)
-		WRITE (stdout, '(a, E17.10)')	'!,T,', Transmission_coefficient
+		WRITE (stdout, '(a, E17.10)')	'!,Eleft,', Eleft
+		WRITE (stdout, '(a, E17.10)')	'!,Eright,', Eright
 		WRITE (stdout, '(a, E17.10)')	'!,Total_E,', (Eright + Eleft)
+		WRITE (stdout, '(a, E17.10)')	'!,T,', Transmission_coefficient
 		WRITE (stdout, '(a, E17.10)')	'!Escat', Escat
 		WRITE (stdout, '(a, F10.3)')	'!,Time,', Total_time/(world_size)
 		WRITE (stdout, '(a)') '============================================================='
 	ENDIF
-	
-		IF (root_node) THEN
-		WRITE (stdout, '(a)') '=================Conventional Units=========================='
-		WRITE (stdout, '(a1, a18, F10.3, a, F10.3, a, F10.3)') 	'!',',vg (m/s),', vg(1)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, &
-															',', vg(2)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI, & 
-															',', vg(3)*RY_TO_THZ*1.0d12*tpi*alat1*BOHR_RADIUS_SI
-		WRITE (stdout, '(a1, a18, F10.3)')	'!',',lambda_inc (nm),', alat1/norm2(q)*BOHR_RADIUS_SI*1d9
-		WRITE (stdout, '(a1, a18, F10.3)') 	'!',',LPML (nm),', LPML*alat1*BOHR_RADIUS_SI*1d9
-		WRITE (stdout, '(a1, a18, F10.3)')	'!',',sigmamax (THz),', sigmamax*RY_TO_THZ
-		WRITE (stdout, '(a1, a18, F10.3)')	'!',',w (THz),', sqrt(w2(mode))*RY_TO_THZ
-		WRITE (stdout, '(a)') '============================================================='
-	ENDIF
+
 	
 !	******************************************************************************************
 
@@ -1416,13 +1520,11 @@ SUBROUTINE Group_velocity(frc, f_of_q, tau, zeu, m_loc, nr1, nr2, nr3, epsil, na
 					omega, has_zstar, na_ifc, fd, asr, qplus, w2, z)
 					
 	wplus = sqrt(w2(mode))
-	print *, wplus
 					
 	CALL disp(frc, f_of_q, tau, zeu, m_loc, nr1, nr2, nr3, epsil, nat, ibrav, alat, at, ntyp, ityp, amass, & 
 					omega, has_zstar, na_ifc, fd, asr, qminus, w2, z)
 	
 	wminus = sqrt(w2(mode))
-	print *, wminus
 	
 	vg(3) = (wplus-wminus)/(2*dq*2*pi)
 
@@ -1492,6 +1594,51 @@ FUNCTION maximum(i, j) result(v)
 	END IF
 
 END FUNCTION maximum
+
+SUBROUTINE print_memory_usage(my_nnz, my_nrows, nrows, counter2, mem_ityp_PD, mem_ityp_TD, &
+								mem_amass_TD, mem_amass_PD)
+
+	USE kinds
+	use, intrinsic :: iso_fortran_env, only : stdin=>input_unit, &
+											  stdout=>output_unit, &
+											  stderr=>error_unit
+	USE constants, ONLY : GB_byte
+	USE mp_module
+	IMPLICIT NONE
+	INCLUDE 'mpif.h'
+	INTEGER(KIND = IP) 		:: 	my_nnz, my_nrows, counter2, nrows
+	INTEGER					::	mem_ityp_TD, mem_ityp_PD, mem_amass_TD, mem_amass_PD
+	REAL					::	my_memory_A, memory_A, nnz
+	
+	my_memory_A = (IP*my_nnz + RP*my_nnz + 2*CP*my_nnz + 2*CP*my_nrows + 2*CP*my_nrows + &
+					mem_ityp_PD + mem_ityp_TD + mem_amass_PD + mem_amass_TD + &
+					RP*my_nrows + 2*CP*my_nrows + 2.0_RP/8.0_RP*counter2)/GB_byte
+					
+	CALL MPI_REDUCE(real(my_nnz), nnz, 1, MPI_REAL, MPI_SUM, root_process, comm, ierr)
+		
+!	==============MEMORY USAGE OF CRITICAL VARIABLES===========================
+	IF (io_node) THEN
+		WRITE(stdout, '(a)')	'============ MEMORY USAGE ==============='
+		WRITE(stdout, '(a25, E10.3, a3)') 'A-Matrix                         ', (IP*nnz + RP*nnz + 2*CP*nnz)/(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'Incident Wave                    ', real(2*CP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'Scattered Wave                   ', real(2*CP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'K-vector                         ', real(2*CP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'Sigma Values                     ', real(2*RP*nrows)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'borderlogic                     ', real(2.0_RP/8.0_RP*counter2)/real(GB_Byte), ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'ityp_PD                          ', real(mem_ityp_PD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'ityp_TD                          ', real(mem_ityp_TD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'amass_PD                         ', real(mem_amass_PD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a25, E10.3, a3)') 'amass_TD                         ', real(mem_amass_TD)/real(GB_Byte) * world_size, ' GB'
+		WRITE(stdout, '(a40)') '--------------------------------------------------------'
+	END IF
+	
+	CALL MPI_REDUCE(my_memory_A, memory_A, 1, MPI_REAL, MPI_SUM, root_process, &
+					comm, ierr)
+	
+	if (io_node) WRITE (stdout, '(a25, E10.3, a3)') 'Total memory =           ', memory_A, ' GB'	
+	
+
+END SUBROUTINE print_memory_usage
 
 
 
