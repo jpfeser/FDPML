@@ -183,7 +183,7 @@ PROGRAM FDPML
 	REAL(KIND = RP) 				:: Total_time, my_Total_time, Total_mul_time, &
 									   my_Total_time_mkl, start_mkl, finish_mkl, Total_time_mkl, &
 									   Total_comm_time
-	INTEGER							:: my_Total_elements = 0.D0, Total_elements
+	INTEGER							:: my_Total_elements = 0, Total_elements
 !	*****************************************************************************************
 !	Post Processing
 	REAL(KIND = RP) 				::  my_Eleft, my_Eright, Eleft, Eright, &
@@ -1086,10 +1086,9 @@ PROGRAM FDPML
 		close(unit = 639)
 	ENDIF
 	
-	natoms_PML = PD(1)*PD(2)*LPML
-
-	tol = tol*(real(natoms_PML))
-	WRITE(stdout, *) tol
+	natoms_PML = PD(1)*PD(2)*LPML*natc*2 ! total number of atoms in left&right PML
+	IF (io_node) WRITE(stdout, "(a, E10.3)") 'Entering BICG with TOL = ', tol
+	IF (io_node) WRITE(stdout, "(a, E10.3)") 'Machine epsilon is ', eps
 
 !**
 	CALL cpu_time(start)
@@ -1101,6 +1100,14 @@ PROGRAM FDPML
 	CALL MPI_BARRIER(comm, ierr)
 	OPEN(unit = 639, file = restartfile, form = 'unformatted')
 	WRITE(639) my_uscat
+	CLOSE(unit = 639)
+	
+	OPEN(unit = 639, file = 'resvect.dat')
+	do i = 1, size(resvec)
+		if (resvec(i)/=0) then
+			write(639, "(f12.6,f12.6,f12.6,f12.6)"), resvec(i)
+		endif
+	enddo
 	CLOSE(unit = 639)
 	
 	finish_mkl = dsecnd()
@@ -1389,7 +1396,7 @@ PROGRAM FDPML
 							1.1*maxval(real(uincp(mode, :)))/)
 			
 				call plot3d(xplot, zplot, real(uincp(mode, :), kind = 8), terminal='ps', &
-							filename = 'uinc_plot', persist = 'no')
+							filename = 'uinc_plot.ps', persist = 'no')
 			ENDIF
 		
 		ENDIF
@@ -1402,7 +1409,7 @@ PROGRAM FDPML
 							1.1*maxval(real(uscatp(mode, :)))/)
 			
 				call plot3d(xplot, zplot, real(uscatp(mode, :), kind = 8), terminal='ps', &
-							filename = 'uscat_plot', persist = 'no')
+							filename = 'uscat_plot.ps', persist = 'no')
 			ENDIF
 		ENDIF
 		
@@ -1414,7 +1421,7 @@ PROGRAM FDPML
 							1.1*maxval(real(sigp(mode, :)))/)
 			
 				call plot3d(xplot, zplot, real(sigp(mode, :), kind = 8), terminal='ps', &
-							filename = 'sig_plot', persist = 'no')
+							filename = 'sig_plot.ps', persist = 'no')
 			ENDIF
 		ENDIF
 			
