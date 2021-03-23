@@ -1080,6 +1080,8 @@ PROGRAM FDPML
 	ALLOCATE(resvec(2*maxit+1))
 	ALLOCATE(my_uscat(my_nrows))
 	
+	! this might run faster if we convert the coo format to csr? might be a pain and use more memory though
+	
 	IF (restart) THEN
 		open (unit  = 639, file = restartfile, form = 'unformatted')
 		read (unit = 639) my_uscat

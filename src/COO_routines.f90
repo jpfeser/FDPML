@@ -109,6 +109,9 @@ MODULE COO_routines
 		
 		! Multiplication require x(minval(RowInd):max(RowInd)) be on my processor
 		! This snippet calculates the _counts and _displs required for that process
+		!
+		! This only needs to be done once, the first time the code is called
+		! Unfortunately it only works if there is one matrix around.
 		IF ((calc_scounts_n) .or. (calc_scounts_t)) THEN
 			my_maxCol = maxval(ColInd)
 			my_minCol = minval(ColInd)			
@@ -200,7 +203,7 @@ MODULE COO_routines
 		DO n = 1, nnz
 			Row = RowInd(n) - start + 1
 			Col = ColInd(n) - my_minCol + 1
-			y(Row) = y(Row) + Amat(n)*temp(Col)
+			y(Row) = y(Row) + Amat(n)*temp(Col) ! this is not thread safe and cannot be accelerated.
 		ENDDO
 		CALL cpu_time(finish)
 		
