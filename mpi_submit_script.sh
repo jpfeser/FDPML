@@ -35,7 +35,7 @@
 # tells cluster to give you exclusive access to node
 #$ -l exclusive=1
 # send script to the standby queue
-# $ -l standby=1,h_rt=0:15:00
+# $ -l standby=1,h_rt=4:00:00
 # setup messaging about (b)egin, (e)nd, (a)bort, and (s) of your program
 #$ -m beas
 # send messages to this email address
@@ -96,17 +96,17 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	domain_file = '${DOMAIN}',
 	mass_file = '${MASS}', 
 	flfrc1 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Si_q2.fc', 
-	flfrc2 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Si_q2.fc'
+	flfrc2 = '/home/1627/fdpml_learning/gendomain_parallel/Generate-Domain/Ge_q2.fc'
 	mass_input = .true.
 /
   &system
 	simulation_type = 'interface'
-	PD(1) = 32, 32, 128
-	LPML = 20
+	PD(1) = 64, 64, 64
+	LPML = 6
 	periodic = .true.
 	crystal_coordinates = .false.
 	asr = 'simple'
-	wavetype = 'half'
+	wavetype = 'full'
 	q(1) = 0.0, 0.0, 0.4
 	mode = 3
 	sigmamax = 1
@@ -117,11 +117,12 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	q_file = 'q_file.csv'
 /
   &solver
-	tol = 3.5e-8
-	maxit = 1000000
+	tol = 1e-4
+	maxit = 3000
 /
   &restartoptions
 	tmp_dir='${TMP_DIR}' 
+	restart = .true.
 /
   &postprocessing
 	calc_TC = .true.
@@ -129,9 +130,9 @@ cat > test_input.${SGE_TASK_ID} << EOF
 	scattering_Xsec = .true.
 /
   &plots
-	plot_K = .false.
-	plot_sig = .false.
-	plot_uinc = .false.
+	plot_K = .true.
+	plot_sig = .true.
+	plot_uinc = .true.
 	plot_uscat = .true.
 	plottingmode = 3
 /

@@ -225,7 +225,7 @@ CONTAINS
 	SUBROUTINE mp_sum_int( invec, inoutvec, datatype )
 !	mp_int sum operation (To be used in ALLREDUCE or REDUCE MPI operations) 
 		INTEGER :: datatype 
-		COMPLEX(KIND = IP) :: invec(world_size), inoutvec(world_size) 
+		INTEGER(KIND = IP) :: invec(world_size), inoutvec(world_size) 
 		INTEGER :: i 
 		
 		DO i= 1, world_size 

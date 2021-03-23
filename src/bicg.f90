@@ -84,7 +84,7 @@ MODULE bicg
 		REAL(KIND=RP) :: tol
 		INTEGER(KIND=4) :: maxit
 		REAL(KIND=RP) :: my_n2b, n2b, tolb, my_normr, normr
-		INTEGER(KIND=IP) :: iter
+		INTEGER(KIND=IP) :: iter, my_bnnz, bnnz
 		INTEGER(KIND=4)  ::	flag
 		INTEGER(KIND=IP) :: ii ! counter
 		LOGICAL :: call_terminate
@@ -194,18 +194,28 @@ MODULE bicg
 		! Ref: Templates for the Solution of Linear Systems: Building Blocks for Iterative Methods by Berrett et. al.
 		
 		! Checking vaidity of tolerance values
-		IF (root_node) THEN
+		IF (io_node) THEN
 			IF (tol.lt.eps) THEN
-				print *, 'WARNING: Tolerance is below machine error'
+				WRITE(stdout,"(a,i11,a,i11)") 'WARNING: Tolerance ', tol,' is below machine error ', eps
 				tol=eps
 			ELSEIF (tol.ge.1) THEN
-				print *, 'WARNING: Tolerance is too large'
+				WRITE(stdout,"(a)"), 'WARNING: Tolerance is too large'
 				tol= 1-eps
 			ENDIF
 		ENDIF
 		
 		CALL MPI_BCAST(tol, 1, mp_real, root_process, comm, ierr)
 
+		! How many elements of b are non-zero (often, only a few values of b are non-zero)
+		my_bnnz = COUNT(my_b.eq.0)
+		CALL MPI_ALLREDUCE(my_bnnz, bnnz, 1, mp_int, mp_sumi, comm, ierr)
+		
+		IF (io_node) THEN
+			WRITE(stdout,"(a18,i11,a14,i11,a)") 'From BICG: Out of ', nrows, &
+																'D.O.F., only ', bnnz, ' D.O.F. show non-zero value of the RHS'
+			WRITE(stdout,"(a)") ' '	
+		ENDIF
+		
 		my_n2b=nrm2(my_b)
 		my_n2b = my_n2b*my_n2b
 
@@ -226,7 +236,7 @@ MODULE bicg
 				relres=0.D0
 				iter=0
 				resvec(1)=0.D0
-				print *, 'NORM2(b)=0, hence the solution is a trivial solution'
+				WRITE(stdout,"(a)") 'NORM2(b)=0, hence the solution is a trivial solution'
 				call_terminate=.true.
 			ENDIF
 		ENDIF
@@ -237,10 +247,12 @@ MODULE bicg
 			CALL terminate(flag, call_terminate, normr, n2b, ii)
 			RETURN
 		ENDIF
-		
 		! Set up for the method
 		flag= 1
-		tolb=tol*n2b ! normalized tolerance
+		
+		! normalized tolerance (normalized per atom!)
+		tolb=tol*n2b*real(nrows)/real(bnnz) ! <-------------------------
+		
 		rho=1
 		CALL matvectcoo(my_Amat, my_RowInd, my_ColInd, my_nnz, &
 							my_x, my_r, my_nrows, everyones_rows, 'N')
@@ -283,7 +295,7 @@ MODULE bicg
 		my_rt= my_r ! shadow residual
 		resvec(1)= normr
 		
-		WRITE(stdout, '(a, I6, a, E10.3)') 'Iter #', 0, ' relres = ', normr/tolb
+		IF (root_node) WRITE(stdout, '(a, I6, a, E10.3)') 'Iter #', 0, ' relres = ', normr/tolb
 
 
 		DO ii=1,maxit
@@ -417,7 +429,7 @@ MODULE bicg
 		CALL MPI_BCAST(call_terminate, 1, mp_logical, root_process, comm, ierr)
 		
 		IF ((.NOT. call_terminate) .AND. (flag.ne.1) .AND. (my_id.eq.root_process)) THEN
-			print *, 'ERROR: flag==0 and call_terminate==false'
+			WRITE(stdout,"(a)") 'ERROR: flag==0 and call_terminate==false'
 		ENDIF
 				
 		CALL terminate(flag, call_terminate, normr, n2b, ii)
@@ -482,6 +494,7 @@ MODULE bicg
 		USE COO_routines
 		USE blas95
 		USE f95_precision
+		USE interrupts ! <---- used to catch signals
 		IMPLICIT NONE
 		INCLUDE 'mpif.h' ! MPI header file
 		INCLUDE 'mkl.fi' ! MKL header file
@@ -507,7 +520,7 @@ MODULE bicg
 		REAL(KIND=RP) :: tol
 		INTEGER(KIND=4) :: maxit
 		REAL(KIND=RP) :: my_n2b, n2b, tolb, my_normr, normr
-		INTEGER(KIND=IP) :: iter
+		INTEGER(KIND=IP) :: iter, bnnz, my_bnnz
 		INTEGER(KIND=4)  ::	flag
 		INTEGER(KIND=IP) :: ii ! counter
 		LOGICAL :: call_terminate
@@ -529,7 +542,11 @@ MODULE bicg
 		! resatart variables
 		INTEGER :: iterpause
 		CHARACTER(len = 256) :: restartfile
-
+		LOGICAL:: state ! has an interrupt signal been detected (T/F)?
+		
+		! call the signal handler
+		CALL init_signal_handler()
+        CALL set_is_interrupted(.FALSE.)
 
 		resvec(:) = 0.D0
 		! Default values
@@ -561,6 +578,17 @@ MODULE bicg
 		ENDIF
 		
 		CALL MPI_BCAST(tol, 1, mp_real, root_process, comm, ierr)
+		
+		! How many elements of b are non-zero (often, only a few values of b are non-zero)
+		my_bnnz = COUNT(my_b.eq.0)
+		CALL MPI_ALLREDUCE(my_bnnz, bnnz, 1, mp_int, mp_sumi, comm, ierr)
+		
+		IF (io_node) THEN
+			WRITE(stdout,"(a18,i11,a14,i11,a)") 'From BICG: Out of ', nrows, &
+																'D.O.F., only ', bnnz, ' D.O.F. show non-zero value of the RHS'
+			WRITE(stdout,"(a)") ' '	
+		ENDIF
+		
 
 		my_n2b=nrm2(my_b)
 		my_n2b = my_n2b*my_n2b
@@ -596,7 +624,10 @@ MODULE bicg
 		
 		! Set up for the method
 		flag= 1
-		tolb=tol*n2b ! normalized tolerance
+		
+		! normalized tolerance (normalized per atom!)
+		tolb=tol*n2b*nrows/bnnz ! <-------------------------
+		
 		rho=1
 		omega = 1
 		alpha = 0
@@ -605,7 +636,7 @@ MODULE bicg
 !		CALL matvectcoo(my_Amat, my_RowInd, my_ColInd, temp, my_nnz, my_minCol, my_range, my_r, my_nrows)
 
 		my_r= my_b - my_r
-		my_normr= nrm2(my_r)
+		my_normr = nrm2(my_r)
 		my_normr = my_normr*my_normr
 		
 		start_mkl = dsecnd()
@@ -702,11 +733,21 @@ MODULE bicg
 			my_normr = my_normr*my_normr
 			
 !			Write down the solution to the file every iterpause iterations
+			IF (root_node) state=get_is_interrupted()
+			
+			CALL MPI_BCAST(state, 1, mp_logical, root_process, comm, ierr)
 			IF (MOD(ii,iterpause).eq.0.0) THEN
 				CALL MPI_BARRIER(comm, ierr)
 				OPEN(unit = 639, file = restartfile, form = 'unformatted')
 				WRITE(639) my_x
 				CLOSE(unit = 639)
+			ELSEIF (state) THEN
+				print *, 'bicg detects SIGTERM signal on process ',my_id,' at iteration ', ii,'. Creating a restore point and exiting.'
+				OPEN(unit = 639, file = restartfile, form = 'unformatted')
+				WRITE(639) my_x
+				CLOSE(unit = 639)
+				CALL MPI_BARRIER(comm, ierr)
+				EXIT
 			ENDIF
 			
 			start_mkl = dsecnd()			
@@ -840,5 +881,6 @@ MODULE bicg
 			ENDIF
 		ENDIF
 	END SUBROUTINE
+
 
 end module bicg

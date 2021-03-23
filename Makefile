@@ -30,6 +30,7 @@ MODULES		= ${BIN_DIR}/kinds.mod \
 			${BIN_DIR}/COO_routines.mod \
 			${BIN_DIR}/preprocessing_module.mod \
 			${BIN_DIR}/matgen_module.mod \
+			${BIN_DIR}/interrupts.mod \
 			${BIN_DIR}/bicg.mod 
 
 
@@ -58,6 +59,7 @@ OBJECTS		= ${BIN_DIR}/kinds.o \
 			${BIN_DIR}/COO_routines.o \
 			${BIN_DIR}/preprocessing_module.o \
 			${BIN_DIR}/matgen_module.o \
+			${BIN_DIR}/interrupts.o \
 			${BIN_DIR}/bicg.o \
 			${BIN_DIR}/FDPML.o
 
