@@ -847,6 +847,416 @@ MODULE bicg
 
 	END SUBROUTINE mpibicgstabcoo
 	
+		SUBROUTINE mpibicgstabcsr (	my_csrA, my_rowpointer, my_csrj, my_x, my_b, my_nnz, &
+							my_nrows, nrows, everyones_rows, tol, maxit, resvec, flag, &
+							iterpause, restartfile)
+
+!		----------------------------------------------------
+!		SUBROUTINE DISCRIPTION
+!		----------------------------------------------------
+!
+!		Parallelized version of Bi-Conjugate Gradient method to solve
+!		System of linear equations A*x = b for structurally symmetric matrices
+
+!		Conventions :-
+!			Variables with prefix my_* are local variables, and need 
+!			to be calculated a priori
+!			Variables with postfix *_t are variables for transpose matrix
+
+!		----------------------------------------------------
+!		INPUT DATA DISCRIPTION
+!		----------------------------------------------------
+
+!		(my_csrA, my_rowpointer, my_csrj) is the sparse COO representation of local A-matrix 
+!			stored on local machine
+!		my_x - Local x vector (For zero-vector initial guess my_x(1:my_nrows) = 0.D0) 
+!		my_b - Local b vector
+!		my_nnz - number of elements in my_csrA (Number of non-zeros in full - Amatrix)
+!		my_nrows - Number of rows of Amat contained on local machine
+!		nrows - Total number of rows (hence, my_nrows \approx nrows/np)
+!			where, np is the number of processors
+!		everyones_rows - rows contained on every processor. Can be calculated using 
+!			MPI_ALLGATHER procedure on my_nrows
+!		cumulative_rows - cumulative representation on everyones_rows
+!		tol - tolerance for BICG
+!		maxit - maximum number of iterations for BICG
+
+!		----------------------------------------------------
+!		OUTPUT DATA DISCRIPTION
+!		----------------------------------------------------
+
+!		my_x - Local solution x
+!		resvec - vector of residuals calculated at every iteration
+!		flag - flag = 0 Biconjugate gradient converged
+!			   flag = 1 BICG did not converge
+!			   flag = 4 One of the scalar quantities calculated during bicg became too 
+!						small or too large to continue computing.
+!						(TIP: Non-dimensionalizing the LA problem helps)
+
+!		-----------------------------------------------------
+
+		USE kinds
+		USE essentials
+		USE COO_routines
+		USE blas95
+		USE f95_precision
+		USE interrupts ! <---- used to catch signals
+		IMPLICIT NONE
+		INCLUDE 'mpif.h' ! MPI header file
+		INCLUDE 'mkl.fi' ! MKL header file
+		!---------------------------------
+		! MPI variables
+		INTEGER(KIND = IP), DIMENSION(world_size) :: scounts, sdispls, &
+													 recvcounts, recvdispls
+		!------------------------------
+		! Matrix/vector distribution variables
+		INTEGER(KIND=IP) :: my_nnz, my_nrows, nrows
+		INTEGER(KIND=IP) :: counter, ws, i1 ! counters
+		INTEGER(KIND=IP), DIMENSION(my_nnz) :: my_csrj, my_rowpointer
+		INTEGER(KIND=IP) :: my_start, my_size
+		INTEGER(KIND=IP), DIMENSION(world_size) :: minCol, maxCol 
+		COMPLEX(KIND=CP), DIMENSION(my_nnz) :: my_csrA
+		INTEGER(KIND=IP), ALLOCATABLE, DIMENSION(:) :: my_RowInd_t, my_ColInd_t
+		COMPLEX(KIND=CP), ALLOCATABLE, DIMENSION(:) :: my_Amat_t
+		INTEGER(KIND=IP), DIMENSION(world_size) :: everyones_rows
+		INTEGER(KIND=IP), DIMENSION(world_size+1) :: cumulative_rows
+		COMPLEX(KIND=CP), DIMENSION(my_nrows) :: my_x, my_b
+		!-------------------------------------------
+		! bicg variables 
+		REAL(KIND=RP) :: tol
+		INTEGER(KIND=4) :: maxit
+		REAL(KIND=RP) :: my_n2b, n2b, tolb, my_normr, normr
+		INTEGER(KIND=IP) :: iter, bnnz, my_bnnz
+		INTEGER(KIND=4)  ::	flag
+		INTEGER(KIND=IP) :: ii ! counter
+		LOGICAL :: call_terminate
+		REAL(KIND=RP) :: relres 
+		COMPLEX(KIND=CP), DIMENSION(my_nrows) :: my_r, my_rt, my_p, my_xh, my_s, my_sh, &
+												 my_ph, my_t, my_v
+		REAL(KIND=4), DIMENSION(2*maxit+1) :: resvec
+		COMPLEX(KIND=CP) :: beta, alpha, my_rtv, rtv, my_rho, rho, rho1, omega, my_tts, &
+							my_ttt, tts, ttt
+		!-------------------------------------------
+		! Timing variables
+		REAL(KIND=RP) :: ci, cf, c1, c2, cTranspose_Time
+		REAL(KIND=RP) :: cTotal_Time, rate, my_cTranspose_Time, my_cTotal_Time
+		INTEGER(KIND=IP) :: cr, cm, s1, s2, si , sf, sTranspose_Time, sTotal_Time, communication_time 
+		LOGICAL :: count_time
+		REAL(KIND=RP) :: finish, start, start_mkl, finish_mkl
+		!--------------------------------------------
+		! restart variables
+		! resatart variables
+		INTEGER :: iterpause
+		CHARACTER(len = 256) :: restartfile
+		LOGICAL:: state ! has an interrupt signal been detected (T/F)?
+		
+		! call the signal handler
+		CALL init_signal_handler()
+        CALL set_is_interrupted(.FALSE.)
+
+		resvec(:) = 0.D0
+		! Default values
+		call_terminate =.false.
+		count_time = .false. ! set this to false to set timing off
+		
+		! Assuming that the data is distributed to their respective nodes, start from Here!!
+		
+		CALL check_mpinit( ) ! check if MPI has been called
+		
+		calc_scounts_n = .false. ! lets assume this was done by the coo program already!
+		calc_scounts_t = .false.
+		
+	
+		! BEGIN BI-CONJUGATE GRADIENT
+		! The code from here on closely represents the BICG matlab routine. Although, this version
+		! utilizes MPI-capabilities.
+		! Ref: Templates for the Solution of Linear Systems: Building Blocks for Iterative Methods by Berrett et. al.
+		
+		! Checking vaidity of tolerance values
+		IF (root_node) THEN
+			IF (tol.lt.eps) THEN
+				print *, 'WARNING: Tolerance is below machine error'
+				tol=eps
+			ELSEIF (tol.ge.1) THEN
+				print *, 'WARNING: Tolerance is too large'
+				tol= 1-eps
+			ENDIF
+		ENDIF
+		
+		CALL MPI_BCAST(tol, 1, mp_real, root_process, comm, ierr)
+		
+		! How many elements of b are non-zero (often, only a few values of b are non-zero)
+		my_bnnz = COUNT(my_b.eq.0)
+		CALL MPI_ALLREDUCE(my_bnnz, bnnz, 1, mp_int, mp_sumi, comm, ierr)
+		
+		IF (io_node) THEN
+			WRITE(stdout,"(a18,i11,a14,i11,a)") 'From BICG: Out of ', nrows, &
+																'D.O.F., only ', bnnz, ' D.O.F. show non-zero value of the RHS'
+			WRITE(stdout,"(a)") ' '	
+		ENDIF
+		
+
+		my_n2b=nrm2(my_b)
+		my_n2b = my_n2b*my_n2b
+
+		start_mkl = dsecnd()
+		CALL MPI_ALLREDUCE(my_n2b, n2b, 1, mp_real, mp_sumr, comm, ierr)
+		finish_mkl = dsecnd()
+		
+		my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+		
+		n2b = sqrt(n2b)
+		
+		ii = 0
+		
+		IF (root_node) THEN
+			IF (n2b.eq.0) THEN
+				my_x(:)= 0.D0
+				flag=0
+				relres=0.D0
+				iter=0
+				resvec(1)=0.D0
+				print *, 'NORM2(b)=0, hence the solution is a trivial solution'
+				call_terminate=.true.
+			ENDIF
+		ENDIF
+		
+		CALL MPI_BCAST(call_terminate, 1, mp_logical, root_process, comm, ierr)
+		
+		IF (call_terminate) THEN
+			CALL terminate(flag, call_terminate, normr, n2b, ii)
+			RETURN
+		ENDIF
+		
+		! Set up for the method
+		flag= 1
+		
+		! normalized tolerance (normalized per atom!)
+		tolb=tol*n2b*nrows/bnnz ! <-------------------------
+		
+		rho=1
+		omega = 1
+		alpha = 0
+		CALL mpicsrmatvect(my_csrA, my_rowpointer, my_csrj, my_nnz, my_x, my_r, my_nrows, &
+							everyones_rows)
+
+		my_r= my_b - my_r
+		my_normr = nrm2(my_r)
+		my_normr = my_normr*my_normr
+		
+		start_mkl = dsecnd()
+		CALL MPI_ALLREDUCE(my_normr, normr, 1, mp_real, mp_sumr, comm, ierr)
+		finish_mkl = dsecnd()
+		
+		my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+		
+		normr = sqrt(normr) ! Calculated error
+				
+		IF (normr .le. tolb)THEN	! Initial guess was good enough
+			IF (root_node) THEN
+				flag=0
+				relres= normr/n2b
+				iter=0
+				resvec(1)=normr
+				call_terminate=.true.
+			ENDIF
+		ENDIF
+		
+!		IF (ISNAN(normr)) THEN
+!			flag = 2
+!			call_terminate = .true.
+!		ENDIF
+
+		CALL MPI_BCAST(call_terminate, 1, mp_logical, root_process, comm, ierr)
+		
+		IF (call_terminate) THEN
+			CALL terminate(flag, call_terminate, normr, n2b, ii)
+			RETURN
+		ENDIF
+		
+		my_rt= my_r ! shadow residual
+		resvec(1)= normr
+		
+
+
+		DO ii=1,maxit
+			rho1=rho
+			my_rho = dotc(my_rt, my_r)
+			
+			start_mkl = dsecnd()
+			CALL MPI_ALLREDUCE(my_rho, rho, 1, mp_complex, mp_sumc, comm, ierr) 
+			finish_mkl = dsecnd()
+		
+			my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+			
+			
+			IF (rho.eq.0) THEN! need to add the infinity portion here
+				IF (root_node) THEN
+					flag=4
+					call_terminate=.true.
+				ENDIF
+				EXIT
+			ENDIF
+			IF (ii.eq.1) THEN
+				my_p=my_r
+			ELSE
+				beta= (rho/rho1)*(alpha/omega) 			! rho is gathered from all children
+				IF (beta.eq.0) THEN		! need to add the infinity portion here
+					IF (root_node) THEN
+						flag=4
+						call_terminate=.true.
+					ENDIF
+					EXIT
+				ENDIF
+				my_p= my_r+beta*(my_p - omega*my_v)
+			ENDIF ! ii IF
+			my_ph = my_p
+			
+			CALL mpicsrmatvect(my_csrA, my_rowpointer, my_csrj, my_nnz, my_ph, my_v, my_nrows, &
+							everyones_rows)
+			
+			my_rtv=dotc(my_rt, my_v)
+			
+			start_mkl = dsecnd()
+			CALL MPI_ALLREDUCE(my_rtv, rtv, 1, mp_complex, mp_sumc, comm, ierr)
+			finish_mkl = dsecnd()
+		
+			my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+					
+			IF (rtv.eq.0) THEN! need to add the infinity portion here
+				IF (root_node) THEN
+					flag=4
+					call_terminate=.true.
+				ENDIF
+				EXIT
+			ENDIF
+			alpha = rho/rtv
+			
+			my_xh= my_x+alpha*my_ph
+			my_s= my_r-alpha*my_v
+			my_normr= nrm2(my_s)
+			my_normr = my_normr*my_normr
+			
+!			Write down the solution to the file every iterpause iterations
+			IF (root_node) state=get_is_interrupted()
+			
+			CALL MPI_BCAST(state, 1, mp_logical, root_process, comm, ierr)
+			IF (MOD(ii,iterpause).eq.0.0) THEN
+				CALL MPI_BARRIER(comm, ierr)
+				OPEN(unit = 639, file = restartfile, form = 'unformatted')
+				WRITE(639) my_x
+				CLOSE(unit = 639)
+			ELSEIF (state) THEN
+				print *, 'bicg detects SIGTERM signal on process ',my_id,' at iteration ', ii,'. Creating a restore point and exiting.'
+				OPEN(unit = 639, file = restartfile, form = 'unformatted')
+				WRITE(639) my_x
+				CLOSE(unit = 639)
+				CALL MPI_BARRIER(comm, ierr)
+				EXIT
+			ENDIF
+			
+			start_mkl = dsecnd()			
+			CALL MPI_ALLREDUCE(my_normr, normr, 1, mp_real, mp_sumr, comm, ierr)
+			finish_mkl = dsecnd()
+		
+			my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+			
+			normr = sqrt(normr)
+			resvec(2*ii) = normr
+
+			IF (root_node) THEN
+				IF (MOD(ii,100).eq.0.0) THEN
+					WRITE(stdout, '(a)') '	'
+					WRITE(stdout, '(a, I6, a, E10.3)') 'Iter #', ii, ' relres = ', normr/tolb
+				ENDIF
+			ENDIF
+
+			! check for convergence
+			IF (normr.le.tolb) THEN
+				my_x = my_x + alpha*my_p
+				CALL MPI_BARRIER(comm, ierr)
+				OPEN(unit = 639, file = restartfile, form = 'unformatted')
+				WRITE(639) my_x
+				CLOSE(unit = 639)
+				IF (my_id.eq.root_process) THEN
+					flag=0
+					call_terminate=.true.
+				ENDIF
+				EXIT
+			ENDIF
+			
+			my_sh = my_s
+			CALL mpicsrmatvect(my_csrA, my_rowpointer, my_csrj, my_nnz, my_sh, my_t, my_nrows, &
+							everyones_rows)
+
+			my_tts = dotc(my_t, my_s)
+			
+			start_mkl = dsecnd()
+			CALL MPI_ALLREDUCE(my_tts, tts, 1, mp_complex, mp_sumc, comm, ierr) 
+			finish_mkl = dsecnd()
+		
+			my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+			
+			my_ttt = dotc(my_t, my_t)
+			
+			start_mkl = dsecnd()
+			CALL MPI_ALLREDUCE(my_ttt, ttt, 1, mp_complex, mp_sumc, comm, ierr) 
+			finish_mkl = dsecnd()
+		
+			my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+			
+			omega = tts/ttt
+			
+			my_x = my_xh + omega*my_sh
+			my_r = my_s - omega*my_t
+			
+			my_normr = nrm2(my_r)
+			my_normr = my_normr*my_normr
+			
+			start_mkl = dsecnd()			
+			CALL MPI_ALLREDUCE(my_normr, normr, 1, mp_real, mp_sumr, comm, ierr)
+			finish_mkl = dsecnd()
+		
+			my_Total_comm_mkl = my_Total_comm_mkl + finish_mkl - start_mkl
+			
+			normr = sqrt(normr)
+			resvec(2*ii+1) = normr
+			
+			IF (normr.le.tolb) THEN
+				my_x = my_x + alpha*my_p
+				CALL MPI_BARRIER(comm, ierr)
+				OPEN(unit = 639, file = restartfile, form = 'unformatted')
+				WRITE(639) my_x
+				CLOSE(unit = 639)
+				IF (my_id.eq.root_process) THEN
+					flag=0
+					call_terminate=.true.
+				ENDIF
+				EXIT
+			ENDIF
+			
+		ENDDO
+
+		CALL MPI_BCAST(call_terminate, 1, mp_logical, root_process, comm, ierr)
+		
+		IF ((.NOT. call_terminate) .AND. (flag.ne.1) .AND. (my_id.eq.root_process)) THEN
+			print *, 'ERROR: flag==0 and call_terminate==false'
+		ENDIF
+		
+!!		if (count_time.AND.(my_id.eq.root_process)) then
+!!			print *, 'mpibicgstabcsr communication time=', my_Total_comm_mkl 
+!!			print *, 'mpibicgstabcsr CSR mult time=', my_Total_mul_time
+!!		end if
+				
+		CALL terminate(flag, call_terminate, normr, n2b, ii)
+		
+		!----------------!
+			
+10	FORMAT(E12.4)
+11 	FORMAT(i5)
+
+	END SUBROUTINE mpibicgstabcsr
+	
 	SUBROUTINE terminate(flag, call_terminate, normr, n2b, iter)
 	
 		USE kinds, ONLY: RP

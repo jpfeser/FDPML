@@ -1,6 +1,6 @@
 *.mod
 *.o
-output_test.o*
+output_test.*
 mpi_submit_script.sh.o*
 results_*
 timing_*
@@ -19,3 +19,4 @@ tests/submit.sh.o*
 slurm-*
 incard.*
 outcard.*
+*.ps

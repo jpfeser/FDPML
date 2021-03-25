@@ -134,15 +134,15 @@ PROGRAM FDPML
 	INTEGER 						:: 	n1, n2, n3, na, i, j, i1, i2, i3, &
 										nb, ia, ib, ipol, jpol ! counters
 	INTEGER 						:: 	LPML, natoms_PML
-	COMPLEX(KIND = CP), ALLOCATABLE :: 	my_uinc(:), my_K(:), my_uscat(:)
+	COMPLEX(KIND = CP), ALLOCATABLE :: 	my_uinc(:), my_K(:), my_uscat(:), my_K2(:), dK(:)
 	INTEGER 						:: 	ityp
-	REAL(KIND = RP) 				:: 	weight, mass1, mass2, sigmamax, vg(3)
+	REAL(KIND = RP) 				:: 	weight, mass1, mass2, sigmamax, vg(3), ndK
 	REAL(KIND = RP), ALLOCATABLE 	:: 	wscache(:,:,:,:,:)
 	INTEGER 						:: 	m1,m2,m3
 	REAL(KIND = RP) 				:: 	IFC(3,3)
 	INTEGER 						:: 	Location
-	INTEGER(KIND = IP), ALLOCATABLE :: 	ilist(:), jlist(:)
-	COMPLEX(KIND = CP), ALLOCATABLE :: 	Alist(:)
+	INTEGER(KIND = IP), ALLOCATABLE :: 	ilist(:), jlist(:),  my_rowpointer(:), my_jcsr(:)
+	COMPLEX(KIND = CP), ALLOCATABLE :: 	Alist(:), my_Acsr(:)
 	REAL(KIND = RP), ALLOCATABLE	::	sig(:,:)
 	REAL(KIND=RP) 					:: 	rws(0:3,nrwsx), atws(3,3)
 	INTEGER 						:: 	nrws, my_TD3, TD3_start
@@ -151,7 +151,7 @@ PROGRAM FDPML
 !	Local variables
 	INTEGER 						:: 	counter
 	INTEGER 						:: 	total_connections
-	INTEGER(KIND = IP) 				:: 	natoms, my_natoms, rem, my_nrows, nrows, my_nnz
+	INTEGER(KIND = IP) 				:: 	natoms, my_natoms, rem, my_nrows, nrows, my_nnz, my_rowoffset
 	INTEGER(KIND = IP), ALLOCATABLE :: 	everyones_atoms(:), atoms_start(:), &
 										everyones_rows(:)
 	INTEGER(KIND = IP) 				:: 	nSub(4), iSub(4)
@@ -1020,6 +1020,27 @@ PROGRAM FDPML
 	
 	CALL matvectcoo(Alist(1:counter1), ilist(1:counter1), jlist(1:counter1), &
 					counter1, my_uinc, my_K, my_nrows, everyones_rows, 'N')
+					
+	! Lets check to see whether the CSR routine works
+	! Step one: generate the CSR from the COO
+	my_rowoffset=0
+	DO p=0, my_id-1
+		my_rowoffset = my_rowoffset + everyones_rows(p+1)
+	ENDDO
+!!	allocate(my_Acsr(counter1), my_rowpointer(my_nrows+1), my_jcsr(counter1))
+!!	CALL globcoo2loccsr (Alist(1:counter1), ilist(1:counter1), jlist(1:counter1), &
+!!							my_rowoffset, my_nrows, counter1, my_Acsr, my_rowpointer, my_jcsr)
+!!	ALLOCATE(my_K2(my_nrows), dK(my_nrows))
+!!	! Step 2: perform multiplication
+!!	CALL mpicsrmatvect(my_Acsr, my_rowpointer, my_jcsr, counter1, my_uinc, my_K2, my_nrows, &
+!!							everyones_rows)
+!!	! compare them
+!!	dK = my_K-my_K2
+!!	ndK = nrm2(dK)
+!!	print *, 'the diff between coo and csr mult is', ndK
+!!print *, 'the diff between coo and csr mult is', ndK
+!!print *, 'out of an initial norm of ', nrm2(my_K), ' on processor', my_id
+	
 	
 !	CALL cpu_time(finish)
 		
@@ -1095,9 +1116,19 @@ PROGRAM FDPML
 !**
 	CALL cpu_time(start)
 	start_mkl = dsecnd()
-	CALL mpibicgstabcoo (	Alist, ilist, jlist, my_uscat, my_K, my_nnz, &
-						my_nrows, nrows, everyones_rows, tol, maxit, resvec, flag, &
-						iterpause, restartfile	)
+!!	CALL mpibicgstabcoo (	Alist, ilist, jlist, my_uscat, my_K, my_nnz, &
+!!						my_nrows, nrows, everyones_rows, tol, maxit, resvec, flag, &
+!!						iterpause, restartfile	)
+
+	! (Re)make the CSR matrices
+	! deallocate(my_Acsr, my_rowpointer, my_jcsr)
+	allocate(my_Acsr(my_nnz), my_rowpointer(my_nrows+1), my_jcsr(my_nnz))
+	CALL globcoo2loccsr (Alist, ilist, jlist, &
+							my_rowoffset, my_nrows, my_nnz, my_Acsr, my_rowpointer, my_jcsr)
+						
+	CALL mpibicgstabcsr (	my_Acsr, my_rowpointer, my_jcsr, my_uscat, my_K, my_nnz, &
+							my_nrows, nrows, everyones_rows, tol, maxit, resvec, flag, &
+							iterpause, restartfile)
 						
 	CALL MPI_BARRIER(comm, ierr)
 	OPEN(unit = 639, file = restartfile, form = 'unformatted')

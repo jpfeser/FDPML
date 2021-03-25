@@ -87,7 +87,7 @@ FFLAGS_FOR_RUN		= -mkl
 
 # compiler flags for execulatable with call-back and traceback capabilities 
 #(add other flags that you might require for debugging)
-FFLAGS_FOR_DEBUG	= -mkl -CB -traceback
+FFLAGS_FOR_DEBUG	= -mkl -CB -traceback -O2
 
 #
 # Fortran Pre-Processor FLAGS (FPPFLAGS) that affect compilation
