@@ -65,38 +65,38 @@ Input cards:
 	* **PD** = *size of the primary domain, should be same as the one generated gendomain.f90*
 	* **LPML** = *length of PML. Ignored if PML calculation is auto*
 	* **periodic** = *logical, if true applied periodic boundaries in x and y direction*
-	* **crystal_coordinates** = *logical, if true work in crystal coordinates*
-	* **asr** = *acoustic sum rule. Refer QE documentation*
+	* **crystal_coordinates** = *logical (default: .false.), if true work in crystal coordinates*
+	* **asr** = *str (default 'simple'), acoustic sum rule. Refer QE documentation*
 	* **wavetype** = *'half' or 'full' to specify type of incident wave*
 	* **q** = *wavevector, ignored if mp = .true.*
 	* **mode** = *polarization (integer, from lowest to highest frequency)*
 	* **sigmamax** = *maximum non-dimensional damping coefficient (same sig*(k*LPML)/omega)*
-	* **expense_estimate** = *if .true. this run only calculates the memory requirements for the set of input parameters*
+	* **expense_estimate** = *logical (default: .false.) if .true. this run only calculates the memory requirements for the set of input parameters*
 3. qlists
-	* **q_from_file**: *logical, if .true. then simulated multiple incident q points at one time*
+	* **q_from_file**: *logical (default: .false.), if .true. then simulated multiple incident q points at one time*
 	* **q_file**: name of file containing q-points to use if q_from_file=.true., ignore if q_from_file=.false.(default)*
 4. solver
-	* **tol**: relative tolerance for when iterative solver should stop
-	* **maxit**: max number of iterations before stopping iterative solver
-5. restart
-	* **iterpause**
-	* **tmp_dir**
+	* **tol**: real (default: 1E-6), relative tolerance for when iterative solver should stop
+	* **maxit**: int (default: 10000), max number of iterations before stopping iterative solver
+5. restartoptions
+	* **iterpause** *int (default: 10), how often to store checkpoint.*
+	* **tmp_dir**:  *string, directory to store/look for  checkpoint file*
+	* **restart**:  *logical (default: .false.), if .true. then starts from checkpoint file in tmp_dir*
 6. postprocessing
-	* **calc_TC** = *logical, calculate transmission coefficient (for interface problems)*
-	* **scattered_energy**: 
-	* **scattering_Xsec**:
+	* **calc_TC** = *logical (default, .false.), calculate transmission coefficient (for interface problems)*
+	* **scattered_energy**: *logical (default, .false.), calculate total scattered energy*
+	* **scattering_Xsec**: *logical (default, .false.), calculate total scattered energy per incident intensity*
 7. plotting
-	* **plot_K**  = *logical, plot variation of K vector on TD(3)/2 plane*
-	* **plot_uinc** = *logical, plot incident wave*
-	* **plot_uscat** = *logical, plot scattered wave*
-	* **plot_sig** = *logical, plot variation of damping coefficient*
+	* **plot_K**  = *logical (default, .false.), plot variation of K vector on TD(3)/2 plane*
+	* **plot_uinc** = *logical (default, .false.), plot incident wave*
+	* **plot_uscat** = *logical (default, .false.), plot scattered wave*
+	* **plot_sig** = *logical (default, .false.), plot variation of damping coefficient*
 	* **plottingmode** = *1, 2, or 3, plot x, y, or z components of above properties*
 8.  calibrate
-	* **file_input**
-	* **qlist_file**
-	* **slist_file**
-	* **Llist_file**
-	* **Lpoint**
-	* **spoint** 
-	
-							qpoint
+	* **file_input**: *Logical (default, .false.), is this a PML calibration run?*
+	* **qlist_file**:  *str, file with a list of q vectors*
+	* **slist_file**:  *str, file with a list of sigmamax values* 
+	* **Llist_file**:  *str, files with a list of LPML values*
+	* **Lpoint**:  *int (default: 1), which line of Llist_file to read
+	* **spoint**:  *int (default: 1), which line of slist_file to read 
+	* **qpoint**:  *int (default: 1), which line of qlist_file to read
